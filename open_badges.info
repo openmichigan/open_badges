@@ -1,0 +1,5 @@
+
+name = Open badges
+description = Enables assignment of graphical badges to users and roles and sharing badges with the Mozilla Open Badges project (https://wiki.mozilla.org/Badges).
+dependencies[] = upload
+core = 6.x
