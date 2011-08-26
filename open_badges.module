@@ -246,7 +246,7 @@ function open_badges_user($op, &$edit, &$account, $category = 'account') {
           if (key_exists($rid, $roles)) {
             // and user doesn't already have this badge.
             if (!key_exists($roles[$rid], $account->badges)) {
-              $success = open_badges_user_add_badge($account->uid, $roles[$rid], 'role');
+              $success = open_badges_user_add_badge($account->uid, $roles[$rid], array('type' => 'role'));
               if ($success && $message) {
                 drupal_set_message(t('User assigned %name badge.', array('%name' => $badges[$roles[$rid]])));
               }
@@ -274,7 +274,7 @@ function open_badges_user($op, &$edit, &$account, $category = 'account') {
         foreach ($added as $rid) {
           // if this role has a badge
           if (key_exists($rid, $roles) && !key_exists($roles[$rid], $account->badges_all)) {
-            $success = open_badges_user_add_badge($account->uid, $roles[$rid], 'role');
+            $success = open_badges_user_add_badge($account->uid, $roles[$rid], array('type' => 'role'));
             if ($success && $message) {
               drupal_set_message(t('User assigned %name badge.', array('%name' => $badges[$roles[$rid]])));
             }
@@ -600,9 +600,9 @@ function theme_open_badges_change_form_theme($form) {
   for ($id = 1; $id <= 5; $id++) {
     $row = array();
     $row[] = drupal_render($form['add']['add'. $id]);
-    $row[] = drupal_render($form['add']['issueddate'. $id]);
+    $row[] = drupal_render($form['add']['issuedate'. $id]);
     $row[] = drupal_render($form['add']['expirationdate'. $id]);
-    $row[] = drupal_render($form['add']['evidenceurl'. $id]);
+    $row[] = drupal_render($form['add']['evidence'. $id]);
     $rows[] = $row;
   }
   $header = array();
@@ -637,7 +637,7 @@ function open_badges_change_form(&$form_state, $account) {
       '#maxlength' => 255,
       '#autocomplete_path' => 'open_badges/autocomplete',
     );
-    $form['add']['issueddate'. $i] = array(
+    $form['add']['issuedate'. $i] = array(
       '#type' => 'textfield',
       '#default_value' => 'yyyy-mm-dd',
       '#title' => t('Issued Date'),
@@ -653,7 +653,7 @@ function open_badges_change_form(&$form_state, $account) {
       '#size' => 20,
       '#maxlength' => 30
     );
-    $form['add']['evidenceurl'. $i] = array(
+    $form['add']['evidence'. $i] = array(
       '#type' => 'textfield',
       '#title' => t('Evidence URL'),
       '#size' => 30,
@@ -706,9 +706,9 @@ function open_badges_change_form_validate($form, &$form_state) {
       }
     }
     // Verify dates if something other than the default
-    if (!empty($form_state['values']['issueddate'. $i]) && $form_state['values']['issueddate'. $i] != 'yyyy-mm-dd') {
-      if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $form_state['values']['issueddate'. $i])) {
-        form_set_error('issueddate'. $i, t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $form_state['values']['issueddate'. $i])));
+    if (!empty($form_state['values']['issuedate'. $i]) && $form_state['values']['issuedate'. $i] != 'yyyy-mm-dd') {
+      if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $form_state['values']['issuedate'. $i])) {
+        form_set_error('issuedate'. $i, t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $form_state['values']['issuedate'. $i])));
       }
     }
     if (!empty($form_state['values']['expirationdate'. $i]) && $form_state['values']['expirationdate'. $i] != 'yyyy-mm-dd') {
@@ -729,24 +729,27 @@ function open_badges_change_form_submit($form, &$form_state) {
 
   //Add badges for non-empty fields
   for ($i = 1; $i <= 5; $i++) {
+    $extras = array();
+    $extras['type'] = 'user';
+
     if (!empty($form_state['values']['add'. $i])) {
       $validation = open_badges_badge_autocomplete_validation($form_state['values']['add'. $i]);
-      
-      $issueddate = $form_state['values']['issueddate'. $i];
-      if (empty($issueddate) || $issueddate == 'yyyy-mm-dd') {
-        $issueddate = time();
-      } else {
-        $issueddate = strtotime($issueddate);
+
+      $issuedate = $form_state['values']['issuedate'. $i];
+      if (!empty($issuedate) && $issuedate != 'yyyy-mm-dd') {
+        $extras['issuedate'] = strtotime($issuedate);
       }
-      
+
       $expirationdate = $form_state['values']['expirationdate'. $i];
-      if (empty($expirationdate) || $expirationdate == 'yyyy-mm-dd') {
-        $expirationdate = -1;
-      } else {
-        $expirationdate = strtotime($expirationdate);
+      if (!empty($expirationdate) && $expirationdate != 'yyyy-mm-dd') {
+        $extras['expirationdate'] = strtotime($expirationdate);
       }
-      dpm("open_badges_change_form_submit: issueddate: {$issueddate}, expirationdate: {$expirationdate}, evidenceurl: {$form_state['values']['evidenceurl'. $i]}");
-      open_badges_user_add_badge($uid, $validation[0], 'user');
+
+      if (!empty($form_state['values']['evidence'. $i])) {
+        $extras['evidence'] = $form_state['values']['evidence'. $i];
+      }
+      dpm("open_badges_change_form_submit: issuedate: {$extras['issuedate']}, expirationdate: {$extras['expirationdate']}, evidence: {$extras['evidence']}");
+      open_badges_user_add_badge($uid, $validation[0], $extras);
     }
   }
 
@@ -792,7 +795,7 @@ function open_badges_user_save($edit, $uid, $quiet = TRUE) {
 
     foreach ($added as $bid) {
       if (!key_exists($bid, $badges)) {
-        $success = (boolean) open_badges_user_add_badge($uid, $bid);
+        $success = (boolean) open_badges_user_add_badge($uid, $bid, array('type' => NULL));
       }
     }
 
@@ -819,13 +822,25 @@ function open_badges_user_save($edit, $uid, $quiet = TRUE) {
  *
  * @param $uid User ID.
  * @param $bid Badge ID.
- * @param $type Whether set as part of the role, or individually assigned ('user', 'role').
+ * @param $extras Array with extra values.  All are optional except 'type',
+ *                which may be specified as NULL, 'user', or 'role'
+ *   'type'           Whether set as part of the role, or individually assigned ('user', 'role').
+ *   'issuedate'      The date the badge was issued (defaults to 'now')
+ *   'expirationdate' The date the badge expires, or expired.  (defaults to 'never')
+ *   'evidence'       URL for location describing what the user did to earn the badge
  *
  * @return bool with query success
  */
-function open_badges_user_add_badge($uid, $bid, $type = NULL) {
+function open_badges_user_add_badge($uid, $bid, $extras) {
+  $type = $extras['type'];
+  if (isset($extras['issuedate'])) $issuedate = $extras['issuedate']; else $issuedate = time();
+  if (isset($extras['expirationdate'])) $expirationdate = $extras['expirationdate']; else $expirationdate = 0;
+  if (isset($extras['evidence'])) $evidence = $extras['evidence']; else $evidence = NULL;
+
   open_badges_user_remove_badge($uid, $bid, $type);
-  return db_query('INSERT INTO {open_badges_user} (uid, bid, type) VALUES (%d, %d, \'%s\')', $uid, $bid, $type);
+  return db_query('INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, evidence)
+                   VALUES (%d, %d, \'%s\', %d, %d, \'%s\')',
+                   $uid, $bid, $type, $issuedate, $expirationdate, $evidence);
 }
 
 
@@ -1250,7 +1265,7 @@ function open_badges_add_badge_action(&$account, $context = array()) {
   $badges = open_badges_get_badges('all');
 
   foreach ($context['badges'] as $bid) {
-    $success = (boolean) open_badges_user_add_badge($uid, $bid, 'uid');
+    $success = (boolean) open_badges_user_add_badge($uid, $bid, array('type' => 'uid'));
     if ($success) {
       watchdog('action', 'Added open badge %badge to user %name.', array('%name' => check_plain($user->name), '%badge' => check_plain($badges[$bid]->name)));
     }
