@@ -956,6 +956,33 @@ function open_badges_get_badges($uid, $options = array()) {
 
 
 /**
+ * Return an array containing information about all recipients of a given badge id
+ *
+ * Returns uid, type (where type indicates if the user received
+ * the badge because of a role ('role') or individually ('user')),
+ * name, and email address for the user(s).
+ */
+function open_badges_get_badge_recipients($bid) {
+  static $recipients = array();
+
+  dpr("open_badges_get_badge_recipients: entered");
+  // Return cached value if we get called multiple times for some reason
+  if (isset($recipients[$bid])) {
+    return $recipients[$bid];
+  }
+
+  $sql = db_query('SELECT obu.uid, obu.type, u.name, u.mail
+                   FROM {open_badges_user} obu
+                   LEFT JOIN {users} u ON obu.uid = u.uid
+                   WHERE obu.bid = %d', $bid);
+  while ($r = db_fetch_object($sql)) {
+    $recipients[$bid][] = $r;
+  }
+  return $recipients[$bid];
+}
+
+
+/**
  * Return badge object for given badge id
  */
 function open_badges_get_badge($bid) {

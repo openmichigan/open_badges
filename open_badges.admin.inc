@@ -24,29 +24,50 @@ function open_badges_badgelist_form() {
   $form['header'] = array('#type' => 'value', '#value' => array(
     array('data' => t('Name'), 'field' => 'name'),
     array('data' => t('Badge')),
-    array('data' => t('Weight'), 'field' => 'weight', 'sort' => 'asc'),
+    array('data' => t('Description')),
+    array('data' => t('Criteria URL')),
+    array('data' => t('Recipients')),
+    //array('data' => t('Weight'), 'field' => 'weight', 'sort' => 'asc'),
     array('data' => t('Edit')),
     array('data' => t('Delete'))
   ));
 
-  $result = pager_query('SELECT bid, name, image, criteria, weight FROM {open_badges_badges} ubb '. tablesort_sql($form['header']['#value']), 50 );
+  $result = pager_query('SELECT bid, name, image, description, criteria, weight FROM {open_badges_badges} ubb '. tablesort_sql($form['header']['#value']), 50 );
 
   // Build a table listing the appropriate badges.
   while ($badge = db_fetch_object($result)) {
-    // dsm($badge, "open_badges_badgelist_form: a returned badge");
+    // dsm($badge, "open_badges_badgelist_form: badge");
     $badge->class = 'badge ' . _open_badges_class($badge);
     $form['name'][$badge->bid] = array('#value' => check_plain($badge->name));
     $form['badge'][$badge->bid] = array('#value' => theme('open_badge', $badge));
-    $form['weight'][$badge->bid] = array('#type' => 'textfield', '#size' => 4, '#maxlength' => 255, '#default_value' => $badge->weight );
+    $form['description'][$badge->bid] = array('#value' => check_plain($badge->description));
+    $form['criteria'][$badge->bid] = array('#value' => l($badge->criteria, $badge->criteria));
+    //$form['weight'][$badge->bid] = array('#type' => 'textfield', '#size' => 4, '#maxlength' => 255, '#default_value' => $badge->weight );
     $form['edit'][$badge->bid] = array('#value' => l(t('edit'), 'admin/user/open_badges/edit/'. $badge->bid));
     $form['delete'][$badge->bid] = array('#value' => l(t('delete'), 'admin/user/open_badges/delete/'. $badge->bid));
+
+    // Get a list of all the recipients of this badge
+    $recipients = array();
+    $all_r = open_badges_get_badge_recipients($badge->bid);
+    //dsm($all_r, "All recipients returned from open_badges_get_badge_recipients");
+    for($i = 0; $i < count($all_r); $i++) {
+      $recipients[] = $all_r[$i]->name . ' (' . $all_r[$i]->type . ')';
+    }
+    $num_recipients = count($recipients);
+    array_unshift($recipients, t('There are @count recipients', array('@count' => $num_recipients)));
+    if ($num_recipients > 5) {
+      array_splice(&$recipients, 6, $num_recipients, l(t('more...'), 'admin/user/open_badges/edit/'. $badge->bid));
+    }
+    $form['recipients'][$badge->bid] = array('#value' => implode('<br />', $recipients));
+
   }
 
-  $form['submit'] = array('#type' => 'submit', '#value' => t('Update'));
+  // Don't need submit button since we removed weight!
+  //$form['submit'] = array('#type' => 'submit', '#value' => t('Update'));
 
   $form['pager'] = array('#value' => theme('pager', NULL, 50, 0));
 
-  dsm($form, "open_badges_badgelist_form: The form that has been built");
+  //dsm($form, "open_badges_badgelist_form: The form that has been built");
   return $form;
 }
 
@@ -105,7 +126,10 @@ function theme_open_badges_badgelist_form($form) {
       $row = array();
       $row[] = drupal_render($form['name'][$key]);
       $row[] = drupal_render($form['badge'][$key]);
-      $row[] = drupal_render($form['weight'][$key]);
+      $row[] = drupal_render($form['description'][$key]);
+      $row[] = drupal_render($form['criteria'][$key]);
+      $row[] = drupal_render($form['recipients'][$key]);
+      //$row[] = drupal_render($form['weight'][$key]);
       $row[] = drupal_render($form['edit'][$key]);
       $row[] = drupal_render($form['delete'][$key]);
       $rows[] = $row;
