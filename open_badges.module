@@ -71,7 +71,7 @@ function open_badges_menu() {
   $access = array('manage badges');
 
   $items['admin/user/open_badges'] = array(
-    'title' => 'Badges',
+    'title' => 'Open Badges',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('open_badges_badgelist_form'),
     'access arguments' => $access,
@@ -124,7 +124,25 @@ function open_badges_menu() {
     'file' => 'open_badges.admin.inc',
     );
 
-  $items['admin/user/open_badges/edit/%'] = array(
+  $items['admin/user/open_badges/bulkedit/%'] = array(
+    'title' => 'Recipients',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('open_badges_bulkedit_form', 4),
+    'access arguments' => $access,
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'open_badges.admin.inc',
+    );
+
+  $items['admin/user/open_badges/bulkedit'] = array(
+    'title' => 'Recipients',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('open_badges_bulkedit_form', NULL),
+    'access arguments' => $access,
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'open_badges.admin.inc',
+    );
+
+    $items['admin/user/open_badges/edit/%'] = array(
     'title' => 'Edit badge',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('open_badges_edit_form', 4),
@@ -824,7 +842,7 @@ function open_badges_user_save($edit, $uid, $quiet = TRUE) {
  * @param $bid Badge ID.
  * @param $extras Array with extra values.  All are optional except 'type',
  *                which may be specified as NULL, 'user', or 'role'
- *   'type'           Whether set as part of the role, or individually assigned ('user', 'role').
+ *   'type'           Whether set as part of the role ('role'), or individually assigned ('user').
  *   'issuedate'      The date the badge was issued (defaults to 'now')
  *   'expirationdate' The date the badge expires, or expired.  (defaults to 'never')
  *   'evidence'       URL for location describing what the user did to earn the badge
@@ -849,7 +867,7 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
  *
  * @param $uid User ID.
  * @param $bid Badge ID.
- * @param $type Whether set as part of the role, or individually assigned ('user', 'role').
+ * @param $type Whether set as part of the role ('role), or individually assigned ('user').
  *
  * @return bool with query success
  */
@@ -1043,6 +1061,30 @@ function open_badges_get_roles($rid = NULL, $options = array()) {
   }
   return $roles;
 }
+/**
+ * Return an array of all users and what badges, if any, they have already received.
+ * Also indicates if they've received the badge individually or because of their role.
+ *
+ */
+function open_badges_get_users() {
+  $usrs = array();
+  $sql = db_query('SELECT u.uid, u.name, u.mail, obu.bid, obu.type
+                   FROM {users} u
+                   LEFT JOIN {open_badges_user} obu
+                   ON obu.uid = u.uid
+                   ORDER BY u.uid ASC');
+  while ($row = db_fetch_object($sql)) {
+    //dsm($row, 'get_users: A raw row from the db_query');
+    if (isset($row->bid)) {
+      //dpm("uid '{$row->uid}' name '{$row->name}' bid '{$row->bid}' type '{$row->type}'");
+      $usrs[$row->uid][$row->type][$row->bid] = $row;
+    } else {
+      //dpm("uid '{$row->uid}' name '{$row->name}'");
+      $usrs[$row->uid]['none'] = $row;
+    }
+  }
+  return $usrs;
+}
 
 /**
  * Save information about roles for open_badges (in settings)
@@ -1212,7 +1254,6 @@ function _open_badges_build_image($badge) {
  * Return html representation of a badge image
  * (note: theme_image does the check_plaining)
  *
- * XXX Figure out what to do here after removing "href" in favor of "criteria"
  */
 function theme_open_badge($badge, $account = NULL) {
   //If we haven't been supplied with a user, use whoever is logged in
@@ -1292,7 +1333,7 @@ function open_badges_add_badge_action(&$account, $context = array()) {
   $badges = open_badges_get_badges('all');
 
   foreach ($context['badges'] as $bid) {
-    $success = (boolean) open_badges_user_add_badge($uid, $bid, array('type' => 'uid'));
+    $success = (boolean) open_badges_user_add_badge($uid, $bid, array('type' => 'user'));
     if ($success) {
       watchdog('action', 'Added open badge %badge to user %name.', array('%name' => check_plain($user->name), '%badge' => check_plain($badges[$bid]->name)));
     }
@@ -1332,8 +1373,8 @@ function open_badges_add_badge_action_submit($form, $form_state) {
 }
 
 /**
- * Implementsa Drupal action.
- * Removes a badge to the current user.
+ * Implements Drupal action.
+ * Removes a badge from the current user.
  */
 function open_badges_remove_badge_action(&$account, $context = array()) {
   if (isset($account->uid)) {

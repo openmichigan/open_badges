@@ -25,7 +25,7 @@ function open_badges_badgelist_form() {
     array('data' => t('Name'), 'field' => 'name'),
     array('data' => t('Badge')),
     array('data' => t('Description')),
-    array('data' => t('Criteria URL')),
+    //array('data' => t('Criteria URL')),
     array('data' => t('Recipients')),
     //array('data' => t('Weight'), 'field' => 'weight', 'sort' => 'asc'),
     array('data' => t('Edit')),
@@ -41,7 +41,7 @@ function open_badges_badgelist_form() {
     $form['name'][$badge->bid] = array('#value' => check_plain($badge->name));
     $form['badge'][$badge->bid] = array('#value' => theme('open_badge', $badge));
     $form['description'][$badge->bid] = array('#value' => check_plain($badge->description));
-    $form['criteria'][$badge->bid] = array('#value' => l($badge->criteria, $badge->criteria));
+    //$form['criteria'][$badge->bid] = array('#value' => l($badge->criteria, $badge->criteria));
     //$form['weight'][$badge->bid] = array('#type' => 'textfield', '#size' => 4, '#maxlength' => 255, '#default_value' => $badge->weight );
     $form['edit'][$badge->bid] = array('#value' => l(t('edit'), 'admin/user/open_badges/edit/'. $badge->bid));
     $form['delete'][$badge->bid] = array('#value' => l(t('delete'), 'admin/user/open_badges/delete/'. $badge->bid));
@@ -56,7 +56,7 @@ function open_badges_badgelist_form() {
     $num_recipients = count($recipients);
     array_unshift($recipients, t('There are @count recipients', array('@count' => $num_recipients)));
     if ($num_recipients > 5) {
-      array_splice(&$recipients, 6, $num_recipients, l(t('more...'), 'admin/user/open_badges/edit/'. $badge->bid));
+      array_splice(&$recipients, 6, $num_recipients, l(t('more...'), 'admin/user/open_badges/bulkedit/'. $badge->bid));
     }
     $form['recipients'][$badge->bid] = array('#value' => implode('<br />', $recipients));
 
@@ -127,7 +127,7 @@ function theme_open_badges_badgelist_form($form) {
       $row[] = drupal_render($form['name'][$key]);
       $row[] = drupal_render($form['badge'][$key]);
       $row[] = drupal_render($form['description'][$key]);
-      $row[] = drupal_render($form['criteria'][$key]);
+      //$row[] = drupal_render($form['criteria'][$key]);
       $row[] = drupal_render($form['recipients'][$key]);
       //$row[] = drupal_render($form['weight'][$key]);
       $row[] = drupal_render($form['edit'][$key]);
@@ -415,6 +415,153 @@ function open_badges_edit_form_submit($form, &$form_state) {
   }
   $form_state['redirect'] = 'admin/user/open_badges';
 }
+
+
+/**
+ * Define the bulk edit form for open badges.
+ */
+function open_badges_bulkedit_form($form_state, $bid = NULL) {
+  //dpm("open_badges_bulkedit_form: entered, bid is {$bid}");
+  $form = array();
+  $title = '';
+
+  if ($bid == NULL) {
+    $form['badgeid'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Badge to process'),
+      '#maxlength' => 255,
+      '#autocomplete_path' => 'open_badges/autocomplete',
+      '#default_value' => '',
+      '#field_suffix' => '',
+      );
+  } else {
+    $badgeinfo = open_badges_get_badge($bid);
+    //dsm($badgeinfo, "The badge information for badge id ". $bid);
+
+    $form['submittedbadgeid'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Badge to process'),
+      '#maxlength' => 255,
+      '#autocomplete_path' => 'open_badges/autocomplete',
+      '#default_value' => $badgeinfo->name . ' (Badge ID ' . $badgeinfo->bid . ')',
+      '#field_suffix' => '',
+      );
+
+    // Get a list of all current users and their badges
+    $all_u = open_badges_get_users();
+    //dsm($all_u, 'The list of all the users... ???');
+
+    $remove_array = array();
+    $add_array = array();
+
+    foreach ($all_u as $u) {
+      //dsm($u, 'Looking at user');
+      if (isset($u['none'])) {
+        // Those with no badges automatically go on the add list
+        $add_array[$u['none']->uid] = $u['none']->name . '(uid ' . $u['none']->uid . ')';
+      } else if (isset($u['user']) && isset($u['user'][$bid])) {
+        // Don't include those that received this badge because of 'role' in the remove list
+        $remove_array[$u['user'][$bid]->uid] = $u['user'][$bid]->name . '(uid ' . $u['user'][$bid]->uid . ')';
+      } else {
+        foreach($u['user'] as $uu) {
+          $add_array[$uu->uid] = $uu->name . '(uid ' . $uu->uid . ')';
+          break;
+        }
+        foreach($u['role'] as $ur) {
+          $add_array[$ur->uid] = $ur->name . '(uid ' . $ur->uid . ')';
+          break;
+        }
+      }
+    }
+    //dsm($add_array, 'The add array');
+    //dsm($remove_array, 'The remove array');
+
+    // Get a list of all the current recipients of this badge
+    $recipients = array();
+    $all_r = open_badges_get_badge_recipients($bid);
+    //dsm($all_r, "All recipients returned from open_badges_get_badge_recipients");
+    for($i = 0; $i < count($all_r); $i++) {
+      $recipients[] = $i+1 . ' ' . $all_r[$i]->name . ' (' . $all_r[$i]->type . ')';
+    }
+    $num_recipients = count($recipients);
+    array_unshift($recipients, t('There are currently @count recipients of @badgename (Badge ID @badgeid): <br \>',
+    array('@count' => $num_recipients, '@badgename' => $badgeinfo->name, '@badgeid' => $bid)));
+    $form['currentrecipients'][$badge->bid] = array('#value' => implode('<br />', $recipients));
+
+    $form['addrecipients'] = array(
+      '#type' => 'select',
+      '#title' => t('User(s) to be added'),
+      '#options' => $add_array,
+      '#multiple' => true,
+      '#size' => 10,
+    );
+    $form['removerecipients'] = array(
+      '#type' => 'select',
+      '#title' => t('User(s) to be removed'),
+      '#options' => $remove_array,
+      '#multiple' => true,
+      '#size' => 10,
+    );
+  }
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+
+  return $form;
+}
+
+function open_badges_bulkedit_form_submit($form, &$form_state) {
+  dpm("open_badges_bulkedit_form_submit: entered");
+
+  //dsm($form, "The form array");
+  //dsm($form_state, "The form_state array");
+
+  if (preg_match('/\('. t('Badge ID') .' (\d+)\)/', $form_state['values']['badgeid'], $matches)) {
+    $bid = $matches[1];
+    $form_state['redirect'] = 'admin/user/open_badges/bulkedit/' . $bid;
+    return;
+  } else if (preg_match('/\('. t('Badge ID') .' (\d+)\)/', $form_state['values']['submittedbadgeid'], $matches)) {
+    dpm("We have a submission to change:" . $matches[0] . ":" . $matches[1] . ":");
+    $bid = $matches[1];
+
+    dpm("Should be adding " . count($form_state['values']['addrecipients']) . ' new users');
+    // Add the badge to the selected user(s)
+    foreach ($form_state['values']['addrecipients'] as $uid) {
+      $success = (boolean) open_badges_user_add_badge($uid, $bid, array('type' => 'user'));
+      if ($success) {
+        watchdog('action', 'Added open badge %badge to user %name.', array('%name' => $uid, '%badge' => $bid));
+        drupal_set_message(t('Successfully added badge to user @user', array('@user' => $uid)));
+      }
+      else {
+        watchdog('action', 'Unable to add open badge %badge to user %name.', array('%name' => $uid, '%badge' => $bid), WATCHDOG_WARNING);
+        drupal_set_message(t('Encountered an error attempting to add badge to user @user', array('@user' => $uid)));
+      }
+    }
+
+    dpm("Should be removing " . count($form_state['values']['removerecipients']) . ' existing users');
+    // Remove the badge from the selected user(s)
+    foreach ($form_state['values']['removerecipients'] as $uid) {
+      $success = (boolean) open_badges_user_remove_badge($uid, $bid, 'user');
+      if ($success) {
+        watchdog('action', 'Removed open badge %badge from user %name.', array('%name' => check_plain($user->name), '%badge' => check_plain($badges[$bid]->name)));
+        drupal_set_message(t('Successfully removed badge from user @user', array('@user' => $uid)));
+      }
+      else {
+        watchdog('action', 'Unable to remove open badge %badge from user %name.', array('%name' => check_plain($user->name), '%badge' => check_plain($badges[$bid]->name)), WATCHDOG_WARNING);
+        drupal_set_message(t('Encountered an error attempting to remove badge from user @user', array('@user' => $uid)));
+      }
+    }
+
+    $form_state['redirect'] = 'admin/user/open_badges/bulkedit/' . $bid;
+  } else {
+    // XXX Should have a validate function to check this?!?
+    drupal_set_message(t('Could not determine the Badge ID to be processed.'));
+    $form_state['redirect'] = 'admin/user/open_badges/bulkedit';
+    return;
+  }
+}
+
 
 /**
  * form to upload the badge images or to delete existing ones

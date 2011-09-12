@@ -179,7 +179,7 @@ function open_badges_schema() {
         'default' => 0,
         ),
       'type' => array(
-        'description' => t("Whether set as part of the role, or individually assigned ('user', 'role')"),
+        'description' => t("Whether set as part of the role ('role'), or individually assigned ('user')"),
         'type' => 'varchar',
         'length' => 20,
         'not null' => TRUE,
