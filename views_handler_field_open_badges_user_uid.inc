@@ -11,7 +11,7 @@
 class views_handler_field_open_badges_user_uid extends views_handler_field {
   
   function render($values) {
-    
+    dpm("views_handler_field_open_badges_user_uid: render(): entered");
     //We'll be needing the uid
     $uid = $values->{$this->field_alias};
     

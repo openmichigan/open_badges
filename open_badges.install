@@ -17,6 +17,8 @@
  *
  */
 
+include 'open_badges_constants.inc';
+
 /**
  * Implements hook_schema().
  */
@@ -68,7 +70,7 @@ function open_badges_schema() {
         'default' => '',
         ),
       'issuerorg' => array(
-        'description' => t('Organization for which the badge is being issued. (i.e., "Troop #218".'),
+        'description' => t('Organization for which the badge is being issued. (i.e., "Troop #218")'),
         'type' => 'varchar',
         'length' => 255,
         'not null' => FALSE,
@@ -149,6 +151,26 @@ function open_badges_schema() {
     'primary key' => array('bid', 'rid'),
     );
 
+  $schema['open_badges_permissions'] = array(
+    'description' => 'Stores whether user has allowed sharing of badges with Mozilla OBI.',
+    'fields' => array(
+      'uid' => array(
+        'description' => t('User ID'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        ),
+      'userallowsharing' => array(
+        'description' => t('If this is 1, the user\'s badges may be shared with the Mozilla OBI.'),
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => OPEN_BADGES_USER_DECISION_NONE,
+        ),
+      ),
+    'primary key' => array('uid'),
+    );
+
   $schema['open_badges_user'] = array(
     'description' => 'Stores which users have which badges.',
     'fields' => array(
@@ -164,19 +186,40 @@ function open_badges_schema() {
         'unsigned' => TRUE,
         'not null' => TRUE,
         ),
-      'allowsharing' => array(
-        'description' => t('If this is 1, the badge may be displayed on this site as well as shared with the Mozilla OBI.'),
+      'bakedimage' => array(
+        'description' => t('"Baked" image returned from Mozilla OBI.'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        ),
+      'state' => array(
+        'description' => t('State of this badge in the Mozilla OBI process of "baking", sharing, etc.'),
         'type' => 'int',
         'size' => 'tiny',
         'not null' => TRUE,
-        'default' => -1,
+        'default' => OPEN_BADGES_STATE_UNDEFINED,
         ),
-      'notified' => array(
+      'usernotified' => array(
         'description' => t('If this is 1, the user has been notified that the badge has been issued.'),
         'type' => 'int',
         'size' => 'tiny',
         'not null' => TRUE,
         'default' => 0,
+        ),
+      'badgeallowsharing' => array(
+        'description' => t('If this is 1, this badges may be displayed locally and shared with the Mozilla OBI.'),
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => OPEN_BADGES_USER_DECISION_NONE,
+        ),
+      'privateurl' => array(
+        'description' => t('Private, non-deterministic, persistent URL given to Mozilla OBI when "baking" a badge.'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'default' => '',
         ),
       'type' => array(
         'description' => t("Whether set as part of the role ('role'), or individually assigned ('user')"),

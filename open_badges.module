@@ -14,6 +14,7 @@
  * @author Nancy Wichmann (NancyDru), http://drupal.org/user/101412
  *
  */
+include 'open_badges_constants.inc';
 
 /**
  * Implements hook_help().
@@ -32,8 +33,8 @@ function open_badges_help($path, $arg) {
     case 'admin/user/open_badges/images':
       return t("This is the open badges image library. Note that this area is not functional if you have private download active. Here you can upload images to display as a open badge, but you can also enter image URLs directly in the badge form, so this area is optional. The images can be anything you like, but it is recommended that you maintain a uniform icon size for all of your badges. Keep in mind that a user may have many badges displayed so you'll probably want to keep them as small as possible (like 16x16 pixels or smaller).");
 
-    case 'user/%/badges':
-    case 'user/%/badges/list':
+    case 'user/%/open_badges':
+    case 'user/%/open_badges/list':
       $showone = variable_get('open_badges_showone', 0);
       if (variable_get('open_badges_userweight', 0) && ($user->uid == $arg[1] || user_access('change badge assignments')) ) {
         // Help messages for users who can reorder.
@@ -160,8 +161,8 @@ function open_badges_menu() {
     'file' => 'open_badges.admin.inc',
     );
 
-  $items['user/%/badges'] = array(
-    'title' => 'Badges',
+  $items['user/%/open_badges'] = array(
+    'title' => 'Open Badges',
     'page callback' => 'open_badges_userweight_page',
     'page arguments' => array(1),
     'access arguments' => array('show badges in user profile'),
@@ -169,7 +170,7 @@ function open_badges_menu() {
     'weight' => 4,
     );
 
-  $items['user/%/badges/list'] = array(
+  $items['user/%/open_badges/list'] = array(
     'title' => 'List',
     'page callback' => 'open_badges_userweight_page',
     'page arguments' => array(1),
@@ -178,7 +179,7 @@ function open_badges_menu() {
     'weight' => -10,
     );
 
-  $items['user/%/badges/edit'] = array(
+  $items['user/%/open_badges/edit'] = array(
     'title' => 'Edit',
     'page callback' => 'open_badges_page',
     'page arguments' => array(1),
@@ -248,8 +249,9 @@ function open_badges_user($op, &$edit, &$account, $category = 'account') {
       }
 
       // Cache both lists (the full list and the limited list)
-      $badges_all[$account->uid] = $account->badges_all;
-      $badges[$account->uid] = $account->badges;
+      // XXX Caching breaks the display of open_badges_userweight_form after submission??
+      //$badges_all[$account->uid] = $account->badges_all;
+      //$badges[$account->uid] = $account->badges;
       break;
 
     case 'insert':
@@ -329,7 +331,7 @@ function open_badges_user($op, &$edit, &$account, $category = 'account') {
         }
         $account->content['open_badges'] = array(
           '#type' => 'user_profile_category',
-          '#title' => t('Badges'),
+          '#title' => t('Open Badges'),
           '#weight' => 10,
           '#attributes' => array('class' => 'open-badges'),
         );
@@ -381,21 +383,28 @@ function open_badges_theme() {
     'open_badges_change_form_theme' => array(
       'arguments' => array('form' => NULL),
     ),
+    'open_badges_date' => array(
+      'arguments' => array('form' => NULL, 'attributes' => NULL),
+    ),
+    'open_badges_link' => array(
+      'arguments' => array('form' => NULL, 'attributes' => NULL),
+    ),
+    'open_badges_allowsharing' => array(
+      'arguments' => array('form' => NULL, 'attributes' => NULL),
+    ),
   );
 }
 
 /**
  * form for users to weight their own badges
  */
-function open_badges_userweight_form($form_state, $account) {
+function open_badges_userweight_form(&$form_state, $account) {
   $allbadges = $account->badges_all;
-
-  // Header row for the badge reweighting list.
-  $form['header'] = array('#type' => 'value', '#value' => array(
-    array('data' => t('Name')),
-    array('data' => t('Badge')),
-    array('data' => t('Weight')),
-  ));
+  $delta = 0;
+  $form = array('#tree' => TRUE);
+  //cache_clear_all(NULL, 'cache_form'); // XXX temporary! XXX
+  //dsm($allbadges, "open_badges_userweight_form: The list of all badges");
+  //dsm($form_state, "open_badges_userweight_form: The incoming form_state");
 
   // We need to know what the weight delta will be, which depends on the number
   // of badges we will list.
@@ -404,6 +413,29 @@ function open_badges_userweight_form($form_state, $account) {
       $delta++;
     }
   }
+
+  $permissions = open_badges_get_user_permissions($account->uid);
+  $userallowsharing = $permissions === FALSE ? FALSE : $permissions->userallowsharing;
+  //dpm("open_badges_userweight_form: The userallowsharing value returned from open_badges_get_user_permissions: " . ($userallowsharing === FALSE ? "FALSE" : $userallowsharing));
+
+  // Pass the initial value through to the validation and submission functions
+  $form_state['open_badges']['initial_values']['userallowsharing'] = $userallowsharing;
+  // Only show 'No Decision' as an option until a decision has been made
+  if ($userallowsharing === FALSE) {
+    drupal_set_message(t('Note: You have not yet decided whether to share badges with Mozilla\'s OBI'), 'warning', FALSE);
+  }
+  $form['userallowsharing'] = array(
+    '#type' => 'select',
+    '#title' => t('Share badges with Mozilla\'s OBI?'),
+    //'#required' => TRUE,
+    '#default_value' => $userallowsharing == OPEN_BADGES_USER_DECISION_NONE ? FALSE : $userallowsharing,
+    '#options' => $userallowsharing === FALSE ?
+                  array(OPEN_BADGES_USER_DECISION_NONE => t('No Decision'),
+                        OPEN_BADGES_USER_DECISION_NO => t('No'),
+                        OPEN_BADGES_USER_DECISION_YES => t('Yes')) :
+                  array(OPEN_BADGES_USER_DECISION_NO => t('No'),
+                        OPEN_BADGES_USER_DECISION_YES => t('Yes')) ,
+  );
 
   // Build a table listing the appropriate badges.
   foreach ($allbadges as $badge) {
@@ -418,9 +450,32 @@ function open_badges_userweight_form($form_state, $account) {
       $weight = $badge->userweight;
     }
 
-    $form['name'][$badge->bid] = array('#value' => check_plain($badge->name));
     $form['badge'][$badge->bid] = array('#value' => theme('open_badge', $badge, $account));
+    $form['name'][$badge->bid] = array('#value' => check_plain($badge->name));
+    $form['description'][$badge->bid] = array('#value' => check_plain($badge->description));
+    $form['issuedate'][$badge->bid] = array('#value' => theme('open_badges_date', $badge->issuedate, array('prefix' => t('Issued: '))));
+    $form['expirationdate'][$badge->bid] = array('#value' => theme('open_badges_date', $badge->expirationdate, array('prefix' => t('Expires: '))));
+    $form['criteria'][$badge->bid] = array('#value' => theme('open_badges_link', $badge->criteria, array('text' => t('Criteria'))));
+    $form['evidence'][$badge->bid] = array('#value' => theme('open_badges_link', $badge->evidence, array('text' => t('Evidence'))));
 
+    //dpm("open_badges_userweight_form: Badge {$badge->bid} badgeallowshring is {$badge->badgeallowsharing}");
+    $form['badgeallowsharing'][$badge->bid] = array(
+      '#type' => 'select',
+      '#title' => t('Display this badge on Open.Michigan site?'),
+      //'#required' => TRUE,
+      '#default_value' => $badge->badgeallowsharing,
+      // Only show 'No Decision' as an option until a decision has been made
+      '#options' => $badge->badgeallowsharing == OPEN_BADGES_USER_DECISION_NONE ?
+                    array(OPEN_BADGES_USER_DECISION_NONE => t('No Decision'),
+                          OPEN_BADGES_USER_DECISION_NO => t('No'),
+                          OPEN_BADGES_USER_DECISION_YES => t('Yes')) :
+                    array(OPEN_BADGES_USER_DECISION_NO => t('No'),
+                          OPEN_BADGES_USER_DECISION_YES => t('Yes')),
+    );
+    //dpm("open_badges_userweight_form: saving initial badgeallowsharing value of {$badge->badgeallowsharing} for badge {$badge->bid}");
+    $form_state['open_badges']['initial_values'][$badge->bid]['badgeallowsharing'] = $badge->badgeallowsharing;
+
+    //dpm("open_badges_userweight_form: Badge {$badge->bid} has weight {$weight}, delta is {$delta}");
     $form['weight'][$badge->bid] = array(
       '#type' => 'weight',
       '#default_value' => $weight,
@@ -436,7 +491,8 @@ function open_badges_userweight_form($form_state, $account) {
 
   $form['submit'] = array('#type' => 'submit', '#value' => t('Submit'));
 
-
+  //dsm($form, "open_badges_userweight_form: the final form");
+  //dsm($form_state, "open_badges_userweight_form: the final form_state");
   return $form;
 }
 
@@ -446,6 +502,8 @@ function open_badges_userweight_form($form_state, $account) {
  * Update the badge userweights
  */
 function open_badges_userweight_form_submit($form, &$form_state) {
+  //dsm($form, "open_badges_userweight_form_submit: The submitted form!");
+  //dsm($form_state, "open_badges_userweight_form_submit: The submitted form_state!");
   if (isset($form['weight']) && is_array($form['weight'])) {
     foreach (element_children($form['weight']) as $bid) {
       db_query("UPDATE {open_badges_user} SET userweight = %d WHERE bid = %d AND uid = %d",
@@ -456,7 +514,87 @@ function open_badges_userweight_form_submit($form, &$form_state) {
     }
     drupal_set_message(t('Your badge order has been updated.'));
   }
+  if (isset($form_state['values']['userallowsharing']) && $form_state['values']['userallowsharing'] != $form_state['open_badges']['initial_values']['userallowsharing']) {
+    if ($form_state['open_badges']['initial_values']['userallowsharing'] === FALSE) {
+      $record = new StdClass();
+      $record->uid = $form_state['values']['uid'];
+      $record->userallowsharing = $form_state['values']['userallowsharing'];
+      $result = drupal_write_record('open_badges_permissions', $record);
+      //dpm("The result of drupal_write_record() was '{$result}'");
+    } else {
+      db_query("UPDATE {open_badges_permissions} SET userallowsharing = %d WHERE uid = %d",
+               $form_state['values']['userallowsharing'], $form_state['values']['uid']);
+      drupal_set_message(t('Your badges will @yesno be shared with Mozilla OBI',
+               array('@yesno' => $form_state['values']['userallowsharing'] == OPEN_BADGES_USER_DECISION_NO ? t('NOT') : t('now'))));
+    }
+  }
+  if (isset($form['badgeallowsharing']) && is_array($form['badgeallowsharing'])) {
+    foreach (element_children($form['badgeallowsharing']) as $bid) {
+      $badgeallowsharing = $form_state['values']['badgeallowsharing'][$bid];
+      dpm("open_badges_userweight_form_submit: For badge {$bid}, badgeallowsharing is '{$badgeallowsharing}' initial value was: " . $form_state['open_badges']['initial_values'][$bid]['badgeallowsharing']);
+      if ($badgeallowsharing != $form_state['open_badges']['initial_values'][$bid]['badgeallowsharing']) {
+        if ($badgeallowsharing == OPEN_BADGES_USER_DECISION_NO || $badgeallowsharing == OPEN_BADGES_USER_DECISION_YES) {
+          //dpm("open_badges_userweight_form_submit: updating badgeallowsharing to {$badgeallowsharing} for badge {$bid}, uid {$form_state['values']['uid']}");
+          db_query("UPDATE {open_badges_user} SET badgeallowsharing = %d WHERE bid = %d AND uid = %d",
+                   $badgeallowsharing, $bid, $form_state['values']['uid']);
+          drupal_set_message(t('Badge \'@name\' will @yesno be displayed',
+                  array('@name' => $form['name'][$bid]['#value'],
+                  '@yesno' => $badgeallowsharing == OPEN_BADGES_USER_DECISION_NO ? t('NOT') : t('now'))),
+                  'warning', FALSE);
+        }
+      }
+    }
+  }
+  // Instead of a redirect, cause the form to be rebuilt and re-displayed
+  $form_state['rebuild'] = TRUE;
+  // $form_state['redirect'] = 'user/' . $form_state['values']['uid'];
+
 }
+
+/**
+ * Theme a date to be displayed
+ */
+function theme_open_badges_date($value, $attributes) {
+  //dpm("theme_open_badges_date: entered");
+  //dsm($value, "theme_open_badges_date: value");
+  //dsm($attributes, "theme_open_badges_date: attribute information");
+  return $attributes['prefix'] . ($value == 0 ? t('N/A') : format_date($value, 'custom', 'm/d/Y', 0));
+}
+
+/**
+ * Theme a link to be displayed
+ */
+function theme_open_badges_link($value, $attributes) {
+  //dpm("theme_open_badges_link: entered");
+  //dsm($value, "theme_open_badges_link: value");
+  //dsm($attributes, "theme_open_badges_link: attribute information");
+  if ($value != '') {
+    return l($attributes['text'], $value, array());
+  } else {
+    return $attributes['text'];
+  }
+}
+
+/**
+ * Theme information about whether the user has allowed sharing of the badge
+ */
+function theme_open_badges_allowsharing($value, $attributes) {
+  //dpm("theme_open_badges_allowsharing: entered");
+  //dsm($value, "theme_open_badges_allowsharing: form information");
+  //dsm($attributes, "theme_open_badges_allowsharing: attribute information");
+  switch($value) {
+    case OPEN_BADGES_USER_DECISION_YES:
+      return t('This badge should be displayed/shared');
+      break;
+    case OPEN_BADGES_USER_DECISION_NO:
+      return t('This badge should NOT be displayed/shared');
+      break;
+    case OPEN_BADGES_USER_DECISION_NONE:
+     return t('No choice has been made yet!');
+     break;
+  }
+}
+
 
 /**
  * Form theming function
@@ -473,24 +611,47 @@ function theme_open_badges_userweight_form($form) {
       }
 
       //Create the rows array for the table theme
+      //We create an inner table within each row for name, description, issuedate, expirationdate, etc.
       $row = array();
-      $row[] = drupal_render($form['name'][$key]);
-      $row[] = drupal_render($form['badge'][$key]);
-      $row[] = drupal_render($form['weight'][$key]);
-      //Add the draggable class to this row
-      $rows[] = array('data' => $row, 'class' => 'draggable', '#weight' => $form['weight'][$key]['#value']);
+      $subrow1 = array();
+      $subrow2 = array();
+      $subrow3 = array();
+
+      $row[] = array('data' => drupal_render($form['badge'][$key]), 'colspan' => 1);
+      $row[] = array('data' => drupal_render($form['weight'][$key]), 'colspan' => 1, /*'width' => '10%'*/);
+
+      $subrow1[] = array('data' => drupal_render($form['name'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
+      $subrow1[] = array('data' => drupal_render($form['description'][$key]), 'colspan' => 4, /*'width' => '40%'*/);
+
+      $subrow2[] = array('data' => drupal_render($form['issuedate'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
+      $subrow2[] = array('data' => drupal_render($form['criteria'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
+      $subrow2[] = array('data' => drupal_render($form['evidence'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
+
+      $subrow3[] = array('data' => drupal_render($form['expirationdate'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
+      $subrow3[] = array ('data' => drupal_render($form['badgeallowsharing'][$key]), 'colspan' => 4, /*'width' => '40%'*/);
+
+      $row[] = theme('table', NULL, array($subrow1, $subrow2, $subrow3));
+
+      // If users are allowed to change weight, add the draggable class to the row
+      if (variable_get('open_badges_userweight', 0)) {
+        $rows[] = array('data' => $row, 'class' => 'draggable', '#weight' => $form['weight'][$key]['#value']);
+      } else {
+        $rows[] = array('data' => $row, '#weight' => $form['weight'][$key]['#value']);
+      }
     }
 
     //Sort the rows by their weights
     usort($rows, 'element_sort');
 
-    //Add the submit button
+/*    //Add the submit button
     $row = array();
-    $row[] = '';
-    $row[] = drupal_render($form['submit']);
-    $row[] = '';
+    //$row[] = '';
+    $row[] = array('data' => drupal_render($form['submit']), 'colspan' => 8);
+    //$row[] = '';
     $rows[] = $row;
-
+    //dsm($rows, "The final rows definition");
+     *
+     */
   }
   else {
     $rows[] = array(array('data' => t('No badges available.'), 'colspan' => '3'));
@@ -504,6 +665,8 @@ function theme_open_badges_userweight_form($form) {
 
   //Render any remaining form elements
   $output .= drupal_render($form);
+
+  // XXX$output .= drupal_render($form['submit']);
 
   return $output;
 
@@ -566,7 +729,7 @@ function open_badges_badge_autocomplete_validation($value) {
 function open_badges_page($uid) {
   $account = user_load($uid);
 
-  drupal_set_title(t('Edit badges for %user_name', array('%user_name' => $account->name)));
+  drupal_set_title(t('Edit open badges for %user_name', array('%user_name' => $account->name)));
 
   return drupal_get_form('open_badges_change_form', $account);
 
@@ -577,15 +740,19 @@ function open_badges_page($uid) {
  */
 function open_badges_userweight_page($uid) {
   $account = user_load($uid);
+  global $user;
 
-  drupal_set_title(t('Badges for %user_name', array('%user_name' => $account->name)));
+  drupal_set_title(t('Open Badges for %user_name', array('%user_name' => $account->name)));
 
+  //dpm("open_badges_userweight_page: account uid: {$account->uid} user uid: {$user->uid} variable open_badges_userweight: ". variable_get('open_badges_userweight', 0));
   // Do we have the right to rearrange badges?
-  if (variable_get('open_badges_userweight', 0) && ($account->uid == $user->uid || user_access('change badge assignments')) ) {
+  if (/*variable_get('open_badges_userweight', 0) &&*/ ($account->uid == $user->uid || user_access('change badge assignments')) ) {
     // If the setting allows it and we are the badge owner or somebody with permission, yes.
+    //dpm("open_badges_userweight_page: using open_badges_userweight_form");
     return drupal_get_form('open_badges_userweight_form', $account);
   }
   else {
+    //dpm("open_badges_userweight_page: doing a list...");
     // Otherwise, just list the badges on the page.
     $open_badges = open_badges_get_badges($account->uid, array('nolimit' => TRUE));
     $badges = array();
@@ -601,7 +768,6 @@ function open_badges_userweight_page($uid) {
       return t('This user is not currently assigned any badges.');
     }
   }
-
 }
 
 /**
@@ -635,7 +801,7 @@ function open_badges_change_form(&$form_state, $account) {
   $form = array();
   $dateformat = 'Y-m-d';
   $datedefault = '0000-00-00';
-  
+
   $form['uid'] = array(
     '#type' => 'value',
     '#value' => $account->uid,
@@ -702,7 +868,7 @@ function open_badges_change_form(&$form_state, $account) {
     '#value' => t('Update Badges'),
     '#weight' => 10,
   );
-  
+
   $form['#theme'] = 'open_badges_change_form_theme';
   return $form;
 }
@@ -766,7 +932,7 @@ function open_badges_change_form_submit($form, &$form_state) {
       if (!empty($form_state['values']['evidence'. $i])) {
         $extras['evidence'] = $form_state['values']['evidence'. $i];
       }
-      dpm("open_badges_change_form_submit: issuedate: {$extras['issuedate']}, expirationdate: {$extras['expirationdate']}, evidence: {$extras['evidence']}");
+      //dpm("open_badges_change_form_submit: issuedate: {$extras['issuedate']}, expirationdate: {$extras['expirationdate']}, evidence: {$extras['evidence']}");
       open_badges_user_add_badge($uid, $validation[0], $extras);
     }
   }
@@ -907,8 +1073,9 @@ function open_badges_get_badges($uid, $options = array()) {
   if (empty($past_uid) || $past_uid !== $uid || $past_options !== $options ) {
     $past_uid = $uid;
     if ($uid == 'all' || $uid == 'select') {
+      //dpm("open_badges_get_badges: using first query");
       $sql = db_query('SELECT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
-        b.unhideable, b.fixedweight, b.doesnotcounttolimit, b.tid
+        b.unhideable, b.fixedweight, b.doesnotcounttolimit, b.tid,
         FROM {open_badges_badges} b
         ORDER BY b.weight, b.name');
     }
@@ -916,8 +1083,9 @@ function open_badges_get_badges($uid, $options = array()) {
       $usr = db_result(db_query('SELECT COUNT(uid) FROM {users} WHERE uid = %d AND status = 0', $uid));
 
       if ($usr && variable_get('open_badges_showblocked', 0)) {
+        //dpm("open_badges_get_badges: using second query");
         $sql = db_query('SELECT DISTINCT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
-          b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.userweight, b.tid,
+          b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidence,
           CASE WHEN b.fixedweight = 1 THEN b.weight ELSE COALESCE(u.userweight,b.weight) END coalescedweight
           FROM {open_badges_badges} b
             INNER JOIN {open_badges_user} u ON b.bid = u.bid
@@ -927,8 +1095,9 @@ function open_badges_get_badges($uid, $options = array()) {
           $uid);
       }
       else {
+        //dpm("open_badges_get_badges: using last query");
         $query = 'SELECT DISTINCT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
-          b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.userweight, b.tid,
+          b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidence,
           CASE WHEN b.fixedweight = 1 THEN b.weight ELSE COALESCE(u.userweight,b.weight) END coalescedweight
           FROM {open_badges_badges} b
             INNER JOIN {open_badges_user} u ON b.bid = u.bid
@@ -1007,7 +1176,14 @@ function open_badges_get_badge($bid) {
   return db_fetch_object(db_query('SELECT * FROM {open_badges_badges} WHERE bid = %d', $bid));
 }
 
-
+/**
+ * Return whether user has given permission to share badges with Mozilla OBI
+ * (returns FALSE if the user has not made a decision yet)
+ */
+function open_badges_get_user_permissions($uid) {
+  //dpm("open_badges_get_user_permissions: entered with uid {$uid}");
+  return db_fetch_object(db_query('SELECT userallowsharing FROM {open_badges_permissions} WHERE uid = %d', $uid));
+}
 
 function open_badges_delete_form($form_state, $bid) {
   if ($badge = open_badges_get_badge($bid)) {
@@ -1166,6 +1342,7 @@ function open_badges_save_roles($roles) {
  *   @return string html representation of openbadges
  */
 function open_badges_for_uid($uid, $refresh = FALSE) {
+  //dpm("open_badges_for_uid: entered");
   static $cache;
   if ($uid) {
     if (isset($cache[$uid]) && !$refresh) {
@@ -1190,6 +1367,7 @@ function open_badges_for_uid($uid, $refresh = FALSE) {
  * @return string containing HTML representation of open badges for given user.
  */
 function open_badges_for_user($load, $list = FALSE) {
+  //dpm("open_badges_for_user: entered");
   // @TODO: cache the results to minimize queries.
   $account = user_load($load);
 
@@ -1221,7 +1399,7 @@ function open_badges_for_user($load, $list = FALSE) {
  * $badgeimages is an array of badge image tags from theme_open_badge()
  */
 function theme_open_badge_group($badgeimages) {
-  //dsm($badgeimages, "The badgeimages passed to theme_open_badge_group");
+  //dsm($badgeimages, "theme_open_badge_group: the badgeimages");
   if (!empty($badgeimages)) {
     return '<div class="open_badges">'. implode('', $badgeimages) .'</div>';
   }
@@ -1265,10 +1443,10 @@ function theme_open_badge($badge, $account = NULL) {
   if (!isset($badge->class)) {
     $badge->class = 'badge ' . _open_badges_class($badge);
   }
-  // dpm("theme_open_badge: badge class is '{$badge->class}'");
+  //dpm("theme_open_badge: badge class is '{$badge->class}'");
   $image = _open_badges_build_image($badge);
   //dpm("The image from _open_badges_build_image is '{$image}'");
-  
+
   $criteria = $badge->criteria;
   // Implement token replacement.
   if (module_exists('token')) {
@@ -1485,6 +1663,7 @@ function open_badges_block_list() {
  * Function for open_badges_block(op = 'view').
  */
 function open_badges_block_view($delta = 0) {
+  //dpm("open_badges_block_view: entered");
   $block = array();
 
   switch ($delta) {
@@ -1495,7 +1674,7 @@ function open_badges_block_view($delta = 0) {
         if (in_array($node->type, variable_get('open_badges_current_node_types', array()))) {
           $badges = open_badges_for_user(array('uid' => $node->uid));
           $account = user_load(array('uid' => $node->uid));
-          $block['title'] = t("@name's Badges", array('@name' => $account->name));
+          $block['title'] = t("@name's Open Badges", array('@name' => $account->name));
           $block['content'] = $badges;
         }
       }

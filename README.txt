@@ -11,7 +11,7 @@ Changes from the original module:
 
 XXX XXX XXX
 
-The User Badges module allows each user to be assigned 'badges', displayed as
+The Open Badges module allows each user to be assigned 'badges', displayed as
 a series of iconic images. A common use will probably be to display the badges
 along with the user's information within forums, comments, or node postings.
 These badges can be assigned individually by the administrator or attached to
@@ -26,7 +26,7 @@ level badges.
 You can also set a special badge for blocked users and even override their 
 role badges with this one.
 
-User Badges can be used as a way to establish trust (in the same way as eBay's
+Open Badges can be used as a way to establish trust (in the same way as eBay's
 star graphics) or as an incentive for users. They can also be a quick way to
 identify moderators, administrators, or anyone with a given role.
 
@@ -49,7 +49,7 @@ For dynamic badge sizing (optional):
 
 * ImageCache
 
-User Product Badges requires:
+Open Product Badges requires:
 
 * ecommerce
 
@@ -57,18 +57,20 @@ User Product Badges requires:
 Configuration
 =============
 Once the module is activated, go to Administer >> User management >> Badges
-(admin/user/open_badges). Here you'll find three tabbed sections for User Badges.
+(admin/user/open_badges). Here you'll find tabbed sections for Open Badges.
 
 * List - Lists all current badges and allows you to edit them.
 * Add - Add a new badge.
 * Images - The badge image library. If you already have images available, you
     can ignore this, but if you need a way to upload images for badges, this
     is the place.
+* Recipients - Here you can add/remove badges from multiple users without
+    requiring the administrator to visit each user's page.
 * Roles - Here you can associate a badge with a given role so that all users
     with that role will display the selected badge.
 * Settings - where you can set the global settings for the module
     (including whether or not to use ImageCache).
-* Products - This tab is provided by the module User Product Badges. It allows 
+* Products - This tab is provided by the module Open Product Badges. It allows
     you to associate badges with products for the ecommerce module.
 
 

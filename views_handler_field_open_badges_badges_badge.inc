@@ -26,6 +26,7 @@ class views_handler_field_open_badges_badges_badge extends views_handler_field {
 
   //Render the badge HTML
   function render($values) {
+    dpm("views_handler_field_open_badges_badges_badge: render(): entered");
     //create the badge object
     $badge->bid = $values->{$this->field_alias};
     $badge->name = $values->{$this->aliases['name']};

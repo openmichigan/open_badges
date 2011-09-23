@@ -428,7 +428,7 @@ function open_badges_bulkedit_form($form_state, $bid = NULL) {
   if ($bid == NULL) {
     $form['badgeid'] = array(
       '#type' => 'textfield',
-      '#title' => t('Badge to process'),
+      '#title' => t('Open Badge to process'),
       '#maxlength' => 255,
       '#autocomplete_path' => 'open_badges/autocomplete',
       '#default_value' => '',
@@ -440,7 +440,7 @@ function open_badges_bulkedit_form($form_state, $bid = NULL) {
 
     $form['submittedbadgeid'] = array(
       '#type' => 'textfield',
-      '#title' => t('Badge to process'),
+      '#title' => t('Open Badge to process'),
       '#maxlength' => 255,
       '#autocomplete_path' => 'open_badges/autocomplete',
       '#default_value' => $badgeinfo->name . ' (Badge ID ' . $badgeinfo->bid . ')',
@@ -481,7 +481,7 @@ function open_badges_bulkedit_form($form_state, $bid = NULL) {
     $all_r = open_badges_get_badge_recipients($bid);
     //dsm($all_r, "All recipients returned from open_badges_get_badge_recipients");
     for($i = 0; $i < count($all_r); $i++) {
-      $recipients[] = $i+1 . ' ' . $all_r[$i]->name . ' (' . $all_r[$i]->type . ')';
+      $recipients[] = $all_r[$i]->name . ' (' . $all_r[$i]->type . ')';
     }
     $num_recipients = count($recipients);
     array_unshift($recipients, t('There are currently @count recipients of @badgename (Badge ID @badgeid): <br \>',
