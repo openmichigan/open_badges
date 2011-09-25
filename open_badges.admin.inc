@@ -528,28 +528,30 @@ function open_badges_bulkedit_form_submit($form, &$form_state) {
     dpm("Should be adding " . count($form_state['values']['addrecipients']) . ' new users');
     // Add the badge to the selected user(s)
     foreach ($form_state['values']['addrecipients'] as $uid) {
+      $account = user_load($uid);
       $success = (boolean) open_badges_user_add_badge($uid, $bid, array('type' => 'user'));
       if ($success) {
-        watchdog('action', 'Added open badge %badge to user %name.', array('%name' => $uid, '%badge' => $bid));
-        drupal_set_message(t('Successfully added badge to user @user', array('@user' => $uid)));
+        watchdog('action', 'Added open badge %badge to user %name.', array('%badge' => $bid, '%name' => $account->name));
+        drupal_set_message(t('Successfully added open badge %badge to user %user', array('%badge' => $bid, '%user' => $account->name)));
       }
       else {
-        watchdog('action', 'Unable to add open badge %badge to user %name.', array('%name' => $uid, '%badge' => $bid), WATCHDOG_WARNING);
-        drupal_set_message(t('Encountered an error attempting to add badge to user @user', array('@user' => $uid)));
+        watchdog('action', 'Unable to add open badge %badge to user %name.', array('%badge' => $bid, '%name' => $account->name), WATCHDOG_WARNING);
+        drupal_set_message(t('Encountered an error attempting to add open badge %badge to user %user', array('%badge' => $bid, '%user' => $account->name)));
       }
     }
 
     dpm("Should be removing " . count($form_state['values']['removerecipients']) . ' existing users');
     // Remove the badge from the selected user(s)
     foreach ($form_state['values']['removerecipients'] as $uid) {
+      $account = user_load($uid);
       $success = (boolean) open_badges_user_remove_badge($uid, $bid, 'user');
       if ($success) {
-        watchdog('action', 'Removed open badge %badge from user %name.', array('%name' => check_plain($user->name), '%badge' => check_plain($badges[$bid]->name)));
-        drupal_set_message(t('Successfully removed badge from user @user', array('@user' => $uid)));
+        watchdog('action', 'Removed open badge %badge from user %name.', array('%badge' => $bid /*check_plain($badges[$bid]->name)*/, '%name' => check_plain($account->name)));
+        drupal_set_message(t('Successfully removed open badge %badge from user @user', array('%badge' => $bid, '@user' => $account->name)));
       }
       else {
-        watchdog('action', 'Unable to remove open badge %badge from user %name.', array('%name' => check_plain($user->name), '%badge' => check_plain($badges[$bid]->name)), WATCHDOG_WARNING);
-        drupal_set_message(t('Encountered an error attempting to remove badge from user @user', array('@user' => $uid)));
+        watchdog('action', 'Unable to remove open badge %badge from user %name.', array('%badge' => $bid /*check_plain($badges[$bid]->name)*/, '%name' => check_plain($account->name)), WATCHDOG_WARNING);
+        drupal_set_message(t('Encountered an error attempting to remove open badge from user @user', array('@user' => $account->name)));
       }
     }
 

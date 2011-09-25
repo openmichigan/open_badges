@@ -422,11 +422,11 @@ function open_badges_userweight_form(&$form_state, $account) {
   $form_state['open_badges']['initial_values']['userallowsharing'] = $userallowsharing;
   // Only show 'No Decision' as an option until a decision has been made
   if ($userallowsharing === FALSE) {
-    drupal_set_message(t('Note: You have not yet decided whether to share badges with Mozilla\'s OBI'), 'warning', FALSE);
+    drupal_set_message(t('Note: You have not yet decided whether to share badges with Mozilla\'s OBI (Open Badge Infrastructure)'), 'warning', FALSE);
   }
   $form['userallowsharing'] = array(
     '#type' => 'select',
-    '#title' => t('Share badges with Mozilla\'s OBI?'),
+    '#title' => t('Share all badges with Mozilla\'s OBI (Open Badge Infrastructure)?'),
     //'#required' => TRUE,
     '#default_value' => $userallowsharing == OPEN_BADGES_USER_DECISION_NONE ? FALSE : $userallowsharing,
     '#options' => $userallowsharing === FALSE ?
@@ -602,16 +602,16 @@ function theme_open_badges_allowsharing($value, $attributes) {
 function theme_open_badges_userweight_form($form) {
   $output = '';
 
-  //Loop through the array items in the name array to get all the bids for our listed badges
+  // Loop through the array items in the name array to get all the bids for our listed badges
   if (isset($form['name']) && is_array($form['name'])) {
     foreach (element_children($form['name']) as $key) {
-      //We only want bids as values of $key
+      // We only want bids as values of $key
       if (!is_numeric($key)) {
         continue;
       }
 
-      //Create the rows array for the table theme
-      //We create an inner table within each row for name, description, issuedate, expirationdate, etc.
+      // Create the rows array for the table theme
+      // We create an inner table within each row for name, description, issuedate, expirationdate, etc.
       $row = array();
       $subrow1 = array();
       $subrow2 = array();
@@ -640,30 +640,23 @@ function theme_open_badges_userweight_form($form) {
       }
     }
 
-    //Sort the rows by their weights
+    // Sort the rows by their weights
     usort($rows, 'element_sort');
-
-/*    //Add the submit button
-    $row = array();
-    //$row[] = '';
-    $row[] = array('data' => drupal_render($form['submit']), 'colspan' => 8);
-    //$row[] = '';
-    $rows[] = $row;
-    //dsm($rows, "The final rows definition");
-     *
-     */
   }
   else {
     $rows[] = array(array('data' => t('No badges available.'), 'colspan' => '3'));
   }
 
-  //This makes the table draggable
+  // This makes the table draggable
   drupal_add_tabledrag('open_badges_userweight', 'order', 'sibling', 'open_badges_userweight_element');
 
-  //Theme all that we have processed so far into a table
+  // Place the general choice before the table of issued badges
+  $output .= drupal_render($form['userallowsharing']);
+
+  // Theme the rows we have processed so far into a table
   $output .= theme('table', $form['header']['#value'], $rows, array('id' => 'open_badges_userweight'));
 
-  //Render any remaining form elements
+  // Render any remaining form elements
   $output .= drupal_render($form);
 
   // XXX$output .= drupal_render($form['submit']);
@@ -1022,9 +1015,9 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
   if (isset($extras['evidence'])) $evidence = $extras['evidence']; else $evidence = NULL;
 
   open_badges_user_remove_badge($uid, $bid, $type);
-  return db_query('INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, evidence)
-                   VALUES (%d, %d, \'%s\', %d, %d, \'%s\')',
-                   $uid, $bid, $type, $issuedate, $expirationdate, $evidence);
+  return db_query('INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, evidence, state)
+                   VALUES (%d, %d, \'%s\', %d, %d, \'%s\', %d)',
+                   $uid, $bid, $type, $issuedate, $expirationdate, $evidence, OPEN_BADGES_STATE_EARNED);
 }
 
 
@@ -1060,8 +1053,9 @@ function open_badges_user_remove_badge($uid, $bid, $type = NULL) {
  */
 function open_badges_get_badges($uid, $options = array()) {
   static $badges = array(), $past_uid, $past_options;
+  global $user;
 
-  // dpm("open_badges_get_badges: uid is '{$uid}'");
+  dpm("open_badges_get_badges: uid: '{$uid}', past_uid: '{$past_uid}', current user's id: {$user->uid}");
   if (isset($badges[$uid])) {
     // dsm($badges[$uid], "open_badges_get_badges: CACHED badges[uid] for uid $uid");
     return $badges[$uid];
@@ -1073,7 +1067,7 @@ function open_badges_get_badges($uid, $options = array()) {
   if (empty($past_uid) || $past_uid !== $uid || $past_options !== $options ) {
     $past_uid = $uid;
     if ($uid == 'all' || $uid == 'select') {
-      //dpm("open_badges_get_badges: using first query");
+      dpm("open_badges_get_badges: getting '{$uid}' badges");
       $sql = db_query('SELECT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
         b.unhideable, b.fixedweight, b.doesnotcounttolimit, b.tid,
         FROM {open_badges_badges} b
@@ -1083,7 +1077,7 @@ function open_badges_get_badges($uid, $options = array()) {
       $usr = db_result(db_query('SELECT COUNT(uid) FROM {users} WHERE uid = %d AND status = 0', $uid));
 
       if ($usr && variable_get('open_badges_showblocked', 0)) {
-        //dpm("open_badges_get_badges: using second query");
+        dpm("open_badges_get_badges: getting blocked users badges");
         $sql = db_query('SELECT DISTINCT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
           b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidence,
           CASE WHEN b.fixedweight = 1 THEN b.weight ELSE COALESCE(u.userweight,b.weight) END coalescedweight
@@ -1095,7 +1089,7 @@ function open_badges_get_badges($uid, $options = array()) {
           $uid);
       }
       else {
-        //dpm("open_badges_get_badges: using last query");
+        dpm("open_badges_get_badges: getting normal badge list for uid {$uid}");
         $query = 'SELECT DISTINCT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
           b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidence,
           CASE WHEN b.fixedweight = 1 THEN b.weight ELSE COALESCE(u.userweight,b.weight) END coalescedweight
@@ -1118,8 +1112,13 @@ function open_badges_get_badges($uid, $options = array()) {
       $limit = -1;
     }
 
+
+    $checkallowsharing =  user_access('manage badges') == FALSE && ($uid != 'all' && $uid != 'select' && $uid != $user->uid);
+    dpm("open_badges_get_badges: checkallowsharing is " . $checkallowsharing ? "TRUE" : "FALSE");
     while ($badge = db_fetch_object($sql)) {
       // Display the badge if there's no limit or if the badge is unhideable or if we are within our limit.
+      if ($checkallowsharing && $badge->badgeallowsharing != OPEN_BADGES_USER_DECISION_YES)
+        continue;
       if ($limit != 0 || $badge->unhideable == 1) {
         if ($uid == 'select') {
           $badges[$uid][$badge->bid] = $badge->name;
@@ -1509,14 +1508,16 @@ function open_badges_add_badge_action(&$account, $context = array()) {
   }
   $success = TRUE;
   $badges = open_badges_get_badges('all');
+  $loadeduser = user_load($uid);
+  dsm($loadeduser, "The loaded user for uid " . $uid);
 
   foreach ($context['badges'] as $bid) {
     $success = (boolean) open_badges_user_add_badge($uid, $bid, array('type' => 'user'));
     if ($success) {
-      watchdog('action', 'Added open badge %badge to user %name.', array('%name' => check_plain($user->name), '%badge' => check_plain($badges[$bid]->name)));
+      watchdog('action', 'Added open badge %badge to user %name.', array('%name' => check_plain($loadeduser->name), '%badge' => check_plain($badges[$bid]->name)));
     }
     else {
-      watchdog('action', 'Unable to add open badge %badge to user %name.', array('%name' => check_plain($user->name), '%badge' => check_plain($badges[$bid]->name)), WATCHDOG_WARNING);
+      watchdog('action', 'Unable to add open badge %badge to user %name.', array('%name' => check_plain($loadeduser->name), '%badge' => check_plain($badges[$bid]->name)), WATCHDOG_WARNING);
     }
   }
 }
