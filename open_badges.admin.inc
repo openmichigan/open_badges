@@ -447,6 +447,29 @@ function open_badges_bulkedit_form($form_state, $bid = NULL) {
       '#field_suffix' => '',
       );
 
+    $form['issuedate'] = array(
+      '#type' => 'textfield',
+      '#default_value' => 'yyyy-mm-dd',
+      '#title' => t('Issue Date'),
+      '#description' => t('Defaults to \'now\''),
+      '#size' => 20,
+      '#maxlength' => 30
+    );
+    $form['expirationdate'] = array(
+      '#type' => 'textfield',
+      '#default_value' => 'yyyy-mm-dd',
+      '#title' => t('Expiration Date'),
+      '#description' => t('Defaults to \'never\''),
+      '#size' => 20,
+      '#maxlength' => 30
+    );
+    $form['evidence'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Evidence URL'),
+      '#size' => 30,
+      '#maxlength' => 255
+    );
+
     // Get a list of all current users and their badges
     $all_u = open_badges_get_users();
     //dsm($all_u, 'The list of all the users... ???');
@@ -511,6 +534,20 @@ function open_badges_bulkedit_form($form_state, $bid = NULL) {
   return $form;
 }
 
+function open_badges_bulkedit_form_validate($form, &$form_state) {
+  // Verify dates if something other than the default
+  if (!empty($form_state['values']['issuedate']) && $form_state['values']['issuedate'] != 'yyyy-mm-dd') {
+    if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $form_state['values']['issuedate'])) {
+      form_set_error('issuedate', t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $form_state['values']['issuedate'])));
+    }
+  }
+  if (!empty($form_state['values']['expirationdate']) && $form_state['values']['expirationdate'] != 'yyyy-mm-dd') {
+    if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $form_state['values']['expirationdate'])) {
+      form_set_error('expirationdate', t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $form_state['values']['expirationdate'])));
+    }
+  }
+}
+
 function open_badges_bulkedit_form_submit($form, &$form_state) {
   dpm("open_badges_bulkedit_form_submit: entered");
 
@@ -525,11 +562,28 @@ function open_badges_bulkedit_form_submit($form, &$form_state) {
     dpm("We have a submission to change:" . $matches[0] . ":" . $matches[1] . ":");
     $bid = $matches[1];
 
+    $extras = array('type' => 'user');
+
+    // If these values supplied in the form, use them when adding badges
+    $issuedate = $form_state['values']['issuedate'];
+    if (!empty($issuedate) && $issuedate != 'yyyy-mm-dd') {
+      $extras['issuedate'] = strtotime($issuedate);
+    }
+
+    $expirationdate = $form_state['values']['expirationdate'];
+    if (!empty($expirationdate) && $expirationdate != 'yyyy-mm-dd') {
+      $extras['expirationdate'] = strtotime($expirationdate);
+    }
+
+    if (!empty($form_state['values']['evidence'])) {
+      $extras['evidence'] = $form_state['values']['evidence'];
+    }
+
     dpm("Should be adding " . count($form_state['values']['addrecipients']) . ' new users');
     // Add the badge to the selected user(s)
     foreach ($form_state['values']['addrecipients'] as $uid) {
       $account = user_load($uid);
-      $success = (boolean) open_badges_user_add_badge($uid, $bid, array('type' => 'user'));
+      $success = (boolean) open_badges_user_add_badge($uid, $bid, $extras);
       if ($success) {
         watchdog('action', 'Added open badge %badge to user %name.', array('%badge' => $bid, '%name' => $account->name));
         drupal_set_message(t('Successfully added open badge %badge to user %user', array('%badge' => $bid, '%user' => $account->name)));
@@ -791,16 +845,46 @@ function open_badges_roles_form_submit($form, &$form_state) {
 function open_badges_settings_form() {
   $noyes = array(t('No'), t('Yes'));
 
+
+  $form['defaultissuerorigin'] = array(
+    '#type' => 'textfield',
+    '#title' => t('The issuer origin URL'),
+    '#size' => 75,
+    '#maxlength' => 255,
+    '#required' => TRUE,
+    '#default_value' => variable_get('open_badges_defaultissuerorigin', ''),
+    '#description' => t('Origin of the issuer. This is the &lt;protocol&gt;://&lt;host&gt;:&lt;port&gt;. Must match the origin of the hosted assertion (and in the future, the origin of the public key).'),
+    );
+
   $form['defaultissuername'] = array(
     '#type' => 'textfield',
     '#title' => t('Default issuing organization name'),
     '#size' => 75,
     '#maxlength' => 255,
+    '#required' => TRUE,
     '#default_value' => variable_get('open_badges_defaultissuername', ''),
     '#description' => t('The organization name to use a default if no organization is specified when creating a new badge.'),
     );
 
-  $form['showone'] = array(
+  $form['badgebakingurl'] = array(
+    '#type' => 'textfield',
+    '#title' => t('URL for "baking" a badge'),
+    '#size' => 75,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('open_badges_badgebakingurl', ''),
+    '#description' => t('The URL for the badge baking process.  See XXX for more information on "baking" a badge.'),
+    );
+
+  $form['badgebackpackurl'] = array(
+    '#type' => 'textfield',
+    '#title' => t('URL for sending a badge to the OBI backpack'),
+    '#size' => 75,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('open_badges_badgebakingurl', ''),
+    '#description' => t('The URL for sharing the badge with the user\'s OBI backpack.  See XXX for more information on OBI backpacks.'),
+    );
+
+    $form['showone'] = array(
     '#type' => 'textfield',
     '#title' => t('Number of badges to display'),
     '#size' => 4,
@@ -854,6 +938,38 @@ function open_badges_settings_form() {
     '#default_value' => variable_get('open_badges_nobadges', ''),
     '#description' => t('This provides this message if the user has no badges, rather than nothing. Leave it blank for no message.'),
     );
+
+  $form['notifications'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Notification Emails'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+    '#tree' => TRUE,
+  );
+  $form['notifications']['from'] = array(
+    '#type' => 'textfield',
+    '#title' => t('From address'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('open_badges_fromaddress', ''),
+  );
+  $form['notifications']['subject'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Subject'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('open_badges_subject', ''),
+  );
+  $form['notifications']['bodyshared'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Body for message when already shared with OBI'),
+    '#default_value' => variable_get('open_badges_bodyshared', ''),
+  );
+  $form['notifications']['bodynotshared'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Body for message when badge has not yet been shared with OBI'),
+    '#default_value' => variable_get('open_badges_bodynotshared', ''),
+  );
 
   // Tokens help.
   if (module_exists('token')) {
@@ -919,13 +1035,21 @@ function open_badges_settings_form_submit($form, $form_state) {
   variable_set('open_badges_imagecache', $form_state['values']['imagecache']);
   variable_set('open_badges_nobadges', $form_state['values']['nobadges']);
 
+  $defaultissuerorigin = trim($form_state['values']['defaultissuerorigin']);
+  if (empty($defaultissuerorigin)) {
+    variable_del('open_badges_defaultissuerorigin');
+  }
+  else {
+    variable_set('open_badges_defaultissuerorigin', $defaultissuerorigin);
+  }
+
   // Only set a default issuername if we have some non-whitespace in there.
   $defaultissuername = trim($form_state['values']['defaultissuername']);
   if (empty($defaultissuername)) {
     variable_del('open_badges_defaultissuername');
   }
   else {
-    variable_set('open_badges_defaultissuername', $form_state['values']['defaultissuername']);
+    variable_set('open_badges_defaultissuername', $defaultissuername);
   }
 
   // Only set a vid if we have a value, otherwise wipe it for none/no taxonomy.
@@ -934,6 +1058,48 @@ function open_badges_settings_form_submit($form, $form_state) {
   }
   else {
     variable_del('open_badges_vid');
+  }
+
+  $badgebakingurl = trim($form_state['values']['badgebakingurl']);
+  if (empty($badgebakingurl)) {
+    variable_del('open_badges_badgebakingurl');
+  } else {
+    variable_set('open_badges_badgebakingurl', $badgebakingurl);
+  }
+
+  $badgebackpackurl = trim($form_state['values']['badgebackpackurl']);
+  if (empty($badgebackpackurl)) {
+    variable_del('open_badges_badgebackpackurl');
+  } else {
+    variable_set('open_badges_badgebackpackurl', $badgebackpackurl);
+  }
+
+  $fromaddress = trim($form_state['values']['notifications']['from']);
+  if (empty($fromaddress)) {
+    variable_del('open_badges_fromaddress');
+  } else {
+    variable_set('open_badges_fromaddress', $fromaddress);
+  }
+
+  $subject = trim($form_state['values']['notifications']['subject']);
+  if (empty($subject)) {
+    variable_del('open_badges_subject');
+  } else {
+    variable_set('open_badges_subject', $subject);
+  }
+
+  $bodyshared = trim($form_state['values']['notifications']['bodyshared']);
+  if (empty($bodyshared)) {
+    variable_del('open_badges_bodyshared');
+  } else {
+    variable_set('open_badges_bodyshared', $bodyshared);
+  }
+
+  $bodynotshared = trim($form_state['values']['notifications']['bodynotshared']);
+  if (empty($bodynotshared)) {
+    variable_del('open_badges_bodynotshared');
+  } else {
+    variable_set('open_badges_bodynotshared', $bodynotshared);
   }
 
   drupal_set_message(t('Configuration saved.'));

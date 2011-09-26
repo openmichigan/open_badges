@@ -258,6 +258,7 @@ function open_badges_schema() {
       'uid_bid' => array('uid', 'bid'),
       'uid_weight' => array('uid', 'userweight'),
       'type' => array('type'),
+      'privateurl' => array('privateurl'),
       ),
     );
 

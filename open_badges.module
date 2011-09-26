@@ -195,6 +195,14 @@ function open_badges_menu() {
     'type' => MENU_CALLBACK,
     );
 
+  $items['open_badges/assertion/%'] = array(
+    'title' => 'Open Badges Assertion',
+    'page callback' => 'open_badges_process_assertion_request',
+    'page arguments' => array(2),
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    );
+
   return $items;
 }
 
@@ -424,6 +432,7 @@ function open_badges_userweight_form(&$form_state, $account) {
   if ($userallowsharing === FALSE) {
     drupal_set_message(t('Note: You have not yet decided whether to share badges with Mozilla\'s OBI (Open Badge Infrastructure)'), 'warning', FALSE);
   }
+
   $form['userallowsharing'] = array(
     '#type' => 'select',
     '#title' => t('Share all badges with Mozilla\'s OBI (Open Badge Infrastructure)?'),
@@ -461,7 +470,7 @@ function open_badges_userweight_form(&$form_state, $account) {
     //dpm("open_badges_userweight_form: Badge {$badge->bid} badgeallowshring is {$badge->badgeallowsharing}");
     $form['badgeallowsharing'][$badge->bid] = array(
       '#type' => 'select',
-      '#title' => t('Display this badge on Open.Michigan site?'),
+      '#title' => t('Display this badge on this site?'),
       //'#required' => TRUE,
       '#default_value' => $badge->badgeallowsharing,
       // Only show 'No Decision' as an option until a decision has been made
@@ -817,7 +826,7 @@ function open_badges_change_form(&$form_state, $account) {
     $form['add']['issuedate'. $i] = array(
       '#type' => 'textfield',
       '#default_value' => 'yyyy-mm-dd',
-      '#title' => t('Issued Date'),
+      '#title' => t('Issue Date'),
       '#description' => t('Defaults to \'now\''),
     '#size' => 20,
       '#maxlength' => 30
@@ -939,7 +948,7 @@ function open_badges_change_form_submit($form, &$form_state) {
   }
   if (count($badges_to_go)) {
     foreach ($badges_to_go as $bid) {
-      open_badges_user_remove_badge($uid, $bid);
+      open_badges_user_remove_badge($uid, $bid); // XXX Need to delete from OBI depending on $type?
     }
     drupal_set_message(t('!removalcount badge(s) removed.', array('!removalcount' => count($badges_to_go))));
   }
@@ -1014,7 +1023,7 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
   if (isset($extras['expirationdate'])) $expirationdate = $extras['expirationdate']; else $expirationdate = 0;
   if (isset($extras['evidence'])) $evidence = $extras['evidence']; else $evidence = NULL;
 
-  open_badges_user_remove_badge($uid, $bid, $type);
+  open_badges_user_remove_badge($uid, $bid, $type, FALSE);
   return db_query('INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, evidence, state)
                    VALUES (%d, %d, \'%s\', %d, %d, \'%s\', %d)',
                    $uid, $bid, $type, $issuedate, $expirationdate, $evidence, OPEN_BADGES_STATE_EARNED);
@@ -1027,10 +1036,10 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
  * @param $uid User ID.
  * @param $bid Badge ID.
  * @param $type Whether set as part of the role ('role), or individually assigned ('user').
- *
+ * @param $tellOBI Whether to tell OBI about this deletion
  * @return bool with query success
  */
-function open_badges_user_remove_badge($uid, $bid, $type = NULL) {
+function open_badges_user_remove_badge($uid, $bid, $type = NULL, $tellOBI = FALSE) {
   if (is_null($type)) {
     return db_query('DELETE FROM {open_badges_user} WHERE uid=%d AND bid=%d', $uid, $bid);
   }
@@ -1570,7 +1579,7 @@ function open_badges_remove_badge_action(&$account, $context = array()) {
   $badges = open_badges_get_badges('all');
 
   foreach ($context['badges'] as $bid) {
-    $success = (boolean) open_badges_user_remove_badge($uid, $bid, 'uid');
+    $success = (boolean) open_badges_user_remove_badge($uid, $bid, 'uid', TRUE);
     if ($success) {
       watchdog('action', 'Removed open badge %badge from user %name.', array('%name' => check_plain($user->name), '%badge' => check_plain($badges[$bid]->name)));
     }
@@ -1718,12 +1727,150 @@ function open_badges_block_save($delta = 0, $edit = array()) {
 }
 
 /**
- * Implements hook_cron()
- * UNCOMMENT in order to get Open Badges to work along with Auto Assign Role
- * notes: - this is a quite fast solution in order to solve Auto Assign Role issue
- *        - do not forget to set up your cron
+ * Process badges when a user changes their decision on whether to share badges with OBI
  */
-// function open_badges_cron() {
+function open_badges_process_new_sharing_decision($uid, $decision) {
+  switch($decision) {
+    case OPEN_BADGES_USER_DECISION_NO:
+      $newstate = OPEN_BADGES_STATE_BAKED_AND_EXPIRED;
+      $oldstate1 = OPEN_BADGES_STATE_BAKED;
+      $oldstate2 = OPEN_BADGES_STATE_BAKED_AND_SHARED;
+      break;
+    case OPEN_BADGES_USER_DECISION_YES:
+      $newstate = OPEN_BADGES_STATE_BAKED_AND_SHARED;
+      $oldstate1 = OPEN_BADGES_STATE_BAKED_AND_EXPIRED;
+      $oldstate2 = OPEN_BADGES_STATE_BAKED;
+      break;
+  }
+  // XXX Need to tell OBI about the change in status before updating the Database!
+  $result = db_query('UPDATE {open_badges_user} SET state = %d WHERE uid = %d AND (state = %d OR state %d',
+                     $newstate, $uid, $oldstate1, $oldstate2);
+}
+
+/**
+ * Submit badges in the 'earned' state to be baked
+ */
+function open_badges_bake_badges() {
+  $result = db_query('SELECT * FROM {open_badges_user} WHERE state = %d', OPEN_BADGES_STATE_EARNED);
+  while (($badge = db_fetch_object($result)) != NULL) {
+    // Create the assertion URL
+    // Create the JSON
+    // Notify Mozilla via POST to the baking URL
+    dsm($badge, "A badge in the earned state");
+  }
+}
+
+/**
+ * Notify users of their shiny new badges!
+ */
+function open_badges_notify_new_recipients() {
+  $result = db_query('SELECT * FROM {open_badges_user} obu
+                      LEFT JOIN {users} u ON obu.uid = u.uid
+                      WHERE obu.usernotified = %d AND (obu.state = %d OR obu.state =  %d)
+                      ORDER BY obu.uid',
+                      0, OPEN_BADGES_STATE_BAKED, OPEN_BADGES_STATE_BAKED_AND_SHARED);
+  $current_uid = -1;
+  while (($badge = db_fetch_object($result)) != NULL) {
+    $ret = drupal_mail('open_badges_notify', $badge->state == OPEN_BADGES_STATE_BAKED ? 'notshared' : 'shared',
+                       $badge->mail, language_default(), $params, variable_get('open_badges_fromaddress', ''), TRUE);
+    dpm("The drupal_mail() return value was " . ($ret ? 'TRUE' : 'FALSE'));
+    dsm($badge, "A baked badge whose recipient needs to be notified");
+  }
+}
+
+/**
+ * Send the notification email
+ */
+function open_badges_notify_mail() {
+  dpm("open_badges_notify_mail: entered!");
+  return FALSE;
+}
+
+/**
+ * Process a request from OBI for an assertion
+ *
+ * Returns a JSON blob with a "well-formatted" badge assertion
+ * See https://github.com/brianlovesdata/openbadges/wiki/Assertions
+ * for assertion documentation
+ */
+function open_badges_process_assertion_request($url) {
+  //dpm("open_badges_process_assertion_request: entered!");
+  $result = db_query('SELECT * FROM {open_badges_user} obu
+                      LEFT JOIN {users} u ON obu.uid = u.uid
+                      LEFT JOIN {open_badges_badges} obb ON obu.bid = obb.bid
+                      WHERE obu.privateurl LIKE \'%s\'', trim($url));
+  //dpm("The result of the query is " . ($result == NULL ? "NULL" : $result));
+  //dsm($result, "The result of the database query for the private url {$url}");
+  // If we don't have the requested assertion URL, politely tell them to go away
+  $count = 0;
+  $info = NULL;
+  while (($i = db_fetch_object($result)) != NULL) {
+    $info = $i;
+    $count++;
+  }
+  if ($count == 0) {
+    return t('System error: no such assertion URL');
+  }
+  if ($count > 1) {
+    return t('System error: multiple matching assertion URLs');
+  }
+  //dsm($info, "The returned information");
+  //dpm("You have supplied private url '{$url}' and count is {$count}");
+
+  // Compile the assertion
+  $a = array();
+  $a['recipient'] = $info->mail;
+  if ($info->evidence != '') {
+    $a['evidence'] = $info->evidence;
+  }
+  if ($info->expirationdata != 0) {
+    $a['expires'] = format_date($info->expirationdate, 'custom', 'Y-m-d');
+  }
+  $a['issued_on'] = format_date($info->issuedate, 'custom', 'Y-m-d');
+
+  $a['badge'] = array();
+  $a['badge']['version'] = "0.5.0";
+  $a['badge']['name'] = $info->name;
+  $a['badge']['image'] = $info->image;
+  $a['badge']['description'] = $info->description;
+  $a['badge']['criteria'] = $info->criteria;
+
+  $a['badge']['issuer'] = array();
+  $a['badge']['issuer']['origin'] = $info->originurl != '' ? $info->originurl : variable_get('open_badges_defaultissuerorigin', '');
+  if ($a['badge']['issuer']['origin'] == '') {
+    return t('System error: no issuer origin location supplied');
+  }
+  $a['badge']['issuer']['name'] = $info->issuername != '' ? $info->issuername : variable_get('open_badges_defaultissuername', '');
+  if ($a['badge']['issuer']['name'] == '') {
+    return t('System error: no issuer name supplied');
+  }
+  if ($info->issuerorg != '') {
+    $a['badge']['issuer']['org'] = $info->issuerorg;
+  }
+  if ($info->issuercontact != '') {
+    $a['badge']['issuer']['contact'] = $info->issuercontact;
+  }
+
+  // Now return the assertion to the requestor
+  // (Can't use drupal_json() because it sends the wrong header)
+  drupal_set_header('Content-Type: application/json;');
+  echo drupal_to_js($a);
+
+  return;
+}
+
+/**
+ * Implements hook_cron()
+ */
+function open_badges_cron() {
+  open_badges_bake_badges();
+  open_badges_notify_new_recipients();
+
+ /*
+  * UNCOMMENT in order to get Open Badges to work along with Auto Assign Role
+  * notes: - this is a quite fast solution in order to solve Auto Assign Role issue
+  *        - do not forget to set up your cron
+  */
 //   $result = db_query('SELECT * FROM {open_badges_roles}');
 //
 //   $roles = array();
@@ -1732,4 +1879,4 @@ function open_badges_block_save($delta = 0, $edit = array()) {
 //   }
 //
 //   open_badges_save_roles($roles);
-// }
+}
