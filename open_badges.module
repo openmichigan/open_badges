@@ -1004,6 +1004,17 @@ function open_badges_user_save($edit, $uid, $quiet = TRUE) {
 }
 
 /**
+ * Generate a new 'random' privateurl value (known as the assertion url in OBI documentation)
+ *
+ * @param $uid User ID.
+ * @param $bid Badge ID.
+ * @param $type Whether set as part of the role ('role'), or individually assigned ('user').
+ */
+function _generate_privateurl($uid, $bid, $type) {
+  return sha1(rand() . $uid . $bid . $type . format_date(time()));
+}
+
+/**
  * Add a badge to user.
  *
  * @param $uid User ID.
@@ -1023,10 +1034,16 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
   if (isset($extras['expirationdate'])) $expirationdate = $extras['expirationdate']; else $expirationdate = 0;
   if (isset($extras['evidence'])) $evidence = $extras['evidence']; else $evidence = NULL;
 
+  $existingbadge = open_badges_get_user_badge($uid, $bid, $type);
+  if ($existingbadge != NULL) {
+    $privateurl = $existingbadge->privateurl;
+  } else {
+    $privateurl = _generate_privateurl($uid, $bid, $type);
+  }
   open_badges_user_remove_badge($uid, $bid, $type, FALSE);
-  return db_query('INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, evidence, state)
-                   VALUES (%d, %d, \'%s\', %d, %d, \'%s\', %d)',
-                   $uid, $bid, $type, $issuedate, $expirationdate, $evidence, OPEN_BADGES_STATE_EARNED);
+  return db_query('INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, evidence, state, privateurl)
+                   VALUES (%d, %d, \'%s\', %d, %d, \'%s\', %d, \'%s\')',
+                   $uid, $bid, $type, $issuedate, $expirationdate, $evidence, OPEN_BADGES_STATE_EARNED, $privateurl);
 }
 
 
@@ -1185,6 +1202,13 @@ function open_badges_get_badge($bid) {
 }
 
 /**
+ * Return a user's badge object for given badge id and type
+ */
+function open_badges_get_user_badge($uid, $bid, $type) {
+  return db_fetch_object(db_query('SELECT * FROM {open_badges_user} WHERE uid = %d AND bid = %d AND type LIKE \'%s\'', $uid, $bid, $type));
+}
+
+/**
  * Return whether user has given permission to share badges with Mozilla OBI
  * (returns FALSE if the user has not made a decision yet)
  */
@@ -1249,6 +1273,7 @@ function open_badges_get_roles($rid = NULL, $options = array()) {
  * Return an array of all users and what badges, if any, they have already received.
  * Also indicates if they've received the badge individually or because of their role.
  *
+ * @return An array containing a row for each user and which, if any, badges they've been issued
  */
 function open_badges_get_users() {
   $usrs = array();
@@ -1279,6 +1304,13 @@ function open_badges_get_users() {
 function open_badges_save_roles($roles) {
   if (is_array($roles)) {
     // We have to clear out all badges first.
+    // XXX YIKES! We need to preserve privateurl values first,
+    // XXX or figure out how to not do this mass delete and re-add!
+    // XXX We also need to generate new privateurls where necessary
+    // XXX And add possible values for issuedate, expirationdate, and evidence
+    // XXX This could be made less intrusive if we look to see which roles<->bid
+    // XXX assignments have changed, rather than blowing away everything and
+    // XXX recreating everything?!?
     $success = TRUE;
     db_query('DELETE FROM {open_badges_roles}');
     db_query("DELETE FROM {open_badges_user} WHERE type='role'");
@@ -1728,6 +1760,9 @@ function open_badges_block_save($delta = 0, $edit = array()) {
 
 /**
  * Process badges when a user changes their decision on whether to share badges with OBI
+ *
+ * @param $uid      The user who just changed their sharing decision
+ * @param $decision The user's decision value (OPEN_BADGES_USER_DECISION_NO or OPEN_BADGES_USER_DECISION_YES)
  */
 function open_badges_process_new_sharing_decision($uid, $decision) {
   switch($decision) {
@@ -1738,11 +1773,11 @@ function open_badges_process_new_sharing_decision($uid, $decision) {
       break;
     case OPEN_BADGES_USER_DECISION_YES:
       $newstate = OPEN_BADGES_STATE_BAKED_AND_SHARED;
-      $oldstate1 = OPEN_BADGES_STATE_BAKED_AND_EXPIRED;
-      $oldstate2 = OPEN_BADGES_STATE_BAKED;
+      $oldstate1 = OPEN_BADGES_STATE_BAKED;
+      $oldstate2 = OPEN_BADGES_STATE_BAKED_AND_EXPIRED;
       break;
   }
-  // XXX Need to tell OBI about the change in status before updating the Database!
+  // XXX Need to tell OBI about the change in status before updating the Database!?
   $result = db_query('UPDATE {open_badges_user} SET state = %d WHERE uid = %d AND (state = %d OR state %d',
                      $newstate, $uid, $oldstate1, $oldstate2);
 }
@@ -1751,17 +1786,36 @@ function open_badges_process_new_sharing_decision($uid, $decision) {
  * Submit badges in the 'earned' state to be baked
  */
 function open_badges_bake_badges() {
-  $result = db_query('SELECT * FROM {open_badges_user} WHERE state = %d', OPEN_BADGES_STATE_EARNED);
+  $result = db_query('SELECT * FROM {open_badges_user} obu
+                      LEFT JOIN {open_badges_permissions} obp ON obu.uid = obp.uid
+                      WHERE state = %d', OPEN_BADGES_STATE_EARNED);
   while (($badge = db_fetch_object($result)) != NULL) {
-    // Create the assertion URL
-    // Create the JSON
-    // Notify Mozilla via POST to the baking URL
-    dsm($badge, "A badge in the earned state");
+    $headers = array();
+    $query = array();
+    // Assertion URL must be absolute
+    $ourorigin = variable_get('open_badges_defaultissuerorigin', '');
+
+    // Assemble parts of the query string
+    $query['assertion'] = $ourorigin . '/open_badges/assertion/' . $badge->privateurl;
+    // XXX For now, leave this off, since the default is NOT to share!
+    // XXX $query['award'] = $badge->userallowsharing == OPEN_BADGES_USER_DECISION_YES ? "true" : "false";
+    $data = http_build_query($query, '', '&');
+    $bakerserviceurl = variable_get('open_badges_badgebakingurl', '');
+
+    dpm("The baker url is '{$bakerserviceurl}' and the query string is '{$data}'");
+    $jsonresult = drupal_http_request($bakerserviceurl, $headers, 'GET', $data);
+    dsm($jsonresult, "The result from the get request for baking");
   }
 }
 
 /**
  * Notify users of their shiny new badges!
+ *
+ * We get a list of 'baked' badges where the user has not yet been notified.
+ * The result list should be ordered by UID.  We loop through and collect all
+ * the badges for a user and batch them up into a single email message
+ *
+ * XXX Need to mark each entry as 'notified' after the email is successfully sent!
  */
 function open_badges_notify_new_recipients() {
   $result = db_query('SELECT * FROM {open_badges_user} obu
@@ -1769,36 +1823,78 @@ function open_badges_notify_new_recipients() {
                       WHERE obu.usernotified = %d AND (obu.state = %d OR obu.state =  %d)
                       ORDER BY obu.uid',
                       0, OPEN_BADGES_STATE_BAKED, OPEN_BADGES_STATE_BAKED_AND_SHARED);
+
+  $from = variable_get('open_badges_fromaddress', NULL);
+
   $current_uid = -1;
+  $first_entry = TRUE;
+
   while (($badge = db_fetch_object($result)) != NULL) {
-    $ret = drupal_mail('open_badges_notify', $badge->state == OPEN_BADGES_STATE_BAKED ? 'notshared' : 'shared',
-                       $badge->mail, language_default(), $params, variable_get('open_badges_fromaddress', ''), TRUE);
-    dpm("The drupal_mail() return value was " . ($ret ? 'TRUE' : 'FALSE'));
     dsm($badge, "A baked badge whose recipient needs to be notified");
+
+    if ($first_entry || $current_uid != $badge->uid) {
+      if ($first_entry) {
+        $first_entry = FALSE;
+      } else {
+        // We are processing a new UID, send off the message we've composed for the previous user
+        dpm("WOULD BE Sending message for uid {$current_uid} with {$params['badgecount']} badges");
+// XXX     $message = drupal_mail('open_badges_notify', $key, $badge->mail, $language, $params, $from);
+      }
+      dpm("Initializing for a new user: {$badge->uid}");
+      $params = array();
+      $params['badgecount'] = 0;
+      $params['bakedbadge'] = array();
+      $current_uid = $badge->uid;
+      $account = user_load($current_uid);
+      $language = user_preferred_language($account);
+      $params['account'] = $account;
+      // This should be the same for all badges for the same user?
+      $key = $badge->state == OPEN_BADGES_STATE_BAKED ? 'notshared' : 'shared';
+      $first_entry = FALSE;
+    }
+    dpm("Adding a baked image for uid {$current_uid}");
+    $params['bakedbadge'][] = $badge->bakedimage; // Each bakedbadge will be added as an attachment
+    $params['badgecount']++;
   }
+  // Send off the last message we've composed
+  dpm("WOULD BE Sending final message for uid {$current_uid} with {$params['badgecount']} badges");
+//XXX $message = drupal_mail('open_badges_notify', $key, $badge->mail, $language, $params, $from);
 }
 
 /**
  * Send the notification email
  */
-function open_badges_notify_mail() {
+function open_badges_notify_mail($key, &$message, $params) {
   dpm("open_badges_notify_mail: entered!");
+  $message['subject'] = variable_get('open_badges_subject', t('You have earned a new badge!'));
+  switch ($key) {
+    case 'shared':
+      $message['body'][] = variable_get('open_badges_bodyshared', '');
+      break;
+    case 'notshared':
+      $message['body'][] = variable_get('open_badges_bodynotshared', '');
+      break;
+  }
   return FALSE;
 }
 
 /**
- * Process a request from OBI for an assertion
+ * Process a request [from OBI] for an assertion
  *
  * Returns a JSON blob with a "well-formatted" badge assertion
  * See https://github.com/brianlovesdata/openbadges/wiki/Assertions
  * for assertion documentation
  */
-function open_badges_process_assertion_request($url) {
+function open_badges_process_assertion_request($fullurl) {
   //dpm("open_badges_process_assertion_request: entered!");
+  $fullurl = trim($fullurl);
+  $j = stripos($fullurl, '.json');
+  $assertion = $j !== FALSE ? substr($fullurl, 0, $j) : $fullurl;
+
   $result = db_query('SELECT * FROM {open_badges_user} obu
                       LEFT JOIN {users} u ON obu.uid = u.uid
                       LEFT JOIN {open_badges_badges} obb ON obu.bid = obb.bid
-                      WHERE obu.privateurl LIKE \'%s\'', trim($url));
+                      WHERE obu.privateurl LIKE \'%s\'', $assertion);
   //dpm("The result of the query is " . ($result == NULL ? "NULL" : $result));
   //dsm($result, "The result of the database query for the private url {$url}");
   // If we don't have the requested assertion URL, politely tell them to go away
@@ -1829,9 +1925,9 @@ function open_badges_process_assertion_request($url) {
   $a['issued_on'] = format_date($info->issuedate, 'custom', 'Y-m-d');
 
   $a['badge'] = array();
-  $a['badge']['version'] = "0.5.0";
+  $a['badge']['version'] = '0.5.0';
   $a['badge']['name'] = $info->name;
-  $a['badge']['image'] = $info->image;
+  $a['badge']['image'] = '/' . $info->image;  // OBI insists on the leading slash
   $a['badge']['description'] = $info->description;
   $a['badge']['criteria'] = $info->criteria;
 

@@ -486,13 +486,17 @@ function open_badges_bulkedit_form($form_state, $bid = NULL) {
         // Don't include those that received this badge because of 'role' in the remove list
         $remove_array[$u['user'][$bid]->uid] = $u['user'][$bid]->name . '(uid ' . $u['user'][$bid]->uid . ')';
       } else {
-        foreach($u['user'] as $uu) {
-          $add_array[$uu->uid] = $uu->name . '(uid ' . $uu->uid . ')';
-          break;
+        if (isset($u['user'])) {
+          foreach($u['user'] as $uu) {
+            $add_array[$uu->uid] = $uu->name . '(uid ' . $uu->uid . ')';
+            break;
+          }
         }
-        foreach($u['role'] as $ur) {
-          $add_array[$ur->uid] = $ur->name . '(uid ' . $ur->uid . ')';
-          break;
+        if (isset($u['role'])) {
+          foreach($u['role'] as $ur) {
+            $add_array[$ur->uid] = $ur->name . '(uid ' . $ur->uid . ')';
+            break;
+          }
         }
       }
     }

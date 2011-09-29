@@ -187,11 +187,10 @@ function open_badges_schema() {
         'not null' => TRUE,
         ),
       'bakedimage' => array(
-        'description' => t('"Baked" image returned from Mozilla OBI.'),
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
+        'description' => t('"Baked" badge image returned from Mozilla OBI.'),
+        'type' => 'blob',
+        'size' => 'big',
+        'not null' => FALSE,
         ),
       'state' => array(
         'description' => t('State of this badge in the Mozilla OBI process of "baking", sharing, etc.'),
