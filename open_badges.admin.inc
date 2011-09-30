@@ -669,16 +669,16 @@ function open_badges_images_form($form_state) {
 function open_badges_images_form_validate($form, &$form_state) {
   $op = $form_state['clicked_button']['#value'];
   if ($op == t('Upload')) {
-    $dir = file_create_path('badges');
+    $dir = file_create_path('open_badges');
     $is_writable = file_check_directory($dir, 1);
     if ($is_writable) {
       $validators = array(
-        'file_validate_extensions' => array('png jpg jpeg gif'),
+        'file_validate_extensions' => array('png'),  // jpg jpeg gif
       );
       if ($file = file_save_upload('upload', $validators, $dir)) {
         if (!image_get_info($file->filepath)) {
           file_delete($file->filepath);
-          form_set_error('upload', t('Uploaded image file does not appear to be a valid image file.  Please try again'));
+          form_set_error('upload', t('Uploaded image file does not appear to be a valid PNG image file.  Please try again'));
         }
         else {
           open_badges_hold_temporary_file($file);
@@ -718,7 +718,7 @@ function open_badges_images_form_submit($form, &$form_state) {
   // Save uploaded files.
   if ($op == t('Upload')) {
     $file = $form_state['values']['file_image'];
-    dpm("The file is '{$file}'");
+    dsm($file, "The file uploaded file");
     file_set_status($file, FILE_STATUS_PERMANENT);
   }
   elseif ($op == t('Delete')) {
@@ -738,7 +738,7 @@ function open_badges_images_form_submit($form, &$form_state) {
  */
 function open_badges_image_delete($to_delete) {
   foreach ($to_delete as $path) {
-    if (file_check_location($path, file_create_path('badges'))) {
+    if (file_check_location($path, file_create_path('open_badges'))) {
       file_delete($path);
     }
   }
@@ -1117,8 +1117,10 @@ function open_badges_settings_form_submit($form, $form_state) {
  */
 function open_badges_image_selects() {
   $selects = array();
-  $dir = file_create_path('badges');
-  $files = file_scan_directory($dir, '.*\.(((J|j)(p|P)(g|G))|((p|P)(n|N)(g|G))|((g|G)(i|I)(f|F)))', array('.', '..', 'CVS'), 0, FALSE);
+  $dir = file_create_path('open_badges');
+  // XXX Limit this to only PNG, which is the only thing accepted by Mozilla OBI
+  //$files = file_scan_directory($dir, '.*\.(((J|j)(p|P)(g|G))|((p|P)(n|N)(g|G))|((g|G)(i|I)(f|F)))', array('.', '..', 'CVS'), 0, FALSE);
+  $files = file_scan_directory($dir, '.*\.((p|P)(n|N)(g|G))', array('.', '..', 'CVS'), 0, FALSE);
   foreach ($files as $file) {
     $selects[$file->filename] = theme('image', $file->filename, $file->filename, $file->filename);
   }

@@ -187,10 +187,11 @@ function open_badges_schema() {
         'not null' => TRUE,
         ),
       'bakedimage' => array(
-        'description' => t('"Baked" badge image returned from Mozilla OBI.'),
-        'type' => 'blob',
-        'size' => 'big',
-        'not null' => FALSE,
+        'description' => t('Local path of the "baked" badge image returned from Mozilla OBI.'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
         ),
       'state' => array(
         'description' => t('State of this badge in the Mozilla OBI process of "baking", sharing, etc.'),
@@ -276,8 +277,22 @@ function open_badges_install() {
  * Implements hook_uninstall().
  */
 function open_badges_uninstall() {
-  // Delete files.
-  $dir = file_create_path('badges');
+  // Delete badge image files.
+  $dir = file_create_path('open_badges');
+  if ($dir) {
+    $files = file_scan_directory($dir, '.*\.(gif|jpg|jpeg|png)', array('.', '..', 'CVS'), 0, FALSE);
+    foreach ($files as $file) {
+      file_delete($file->filename);
+    }
+  }
+
+  // Delete the badges directory.
+  if (file_exists($dir)) {
+    rmdir($dir);
+  }
+
+  // Delete baked badge files.
+  $dir = file_create_path('open_badges_baked');
   if ($dir) {
     $files = file_scan_directory($dir, '.*\.(gif|jpg|jpeg|png)', array('.', '..', 'CVS'), 0, FALSE);
     foreach ($files as $file) {
