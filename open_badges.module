@@ -388,6 +388,9 @@ function open_badges_theme() {
     'open_badges_badgelist_form' => array(
       'arguments' => array('form' => NULL),
     ),
+    'open_badges_roles_form' => array(
+      'arguments' => array('form' => NULL),
+    ),
     'open_badges_change_form_theme' => array(
       'arguments' => array('form' => NULL),
     ),
@@ -465,7 +468,7 @@ function open_badges_userweight_form(&$form_state, $account) {
     $form['issuedate'][$badge->bid] = array('#value' => theme('open_badges_date', $badge->issuedate, array('prefix' => t('Issued: '))));
     $form['expirationdate'][$badge->bid] = array('#value' => theme('open_badges_date', $badge->expirationdate, array('prefix' => t('Expires: '))));
     $form['criteria'][$badge->bid] = array('#value' => theme('open_badges_link', $badge->criteria, array('text' => t('Criteria'))));
-    $form['evidence'][$badge->bid] = array('#value' => theme('open_badges_link', $badge->evidence, array('text' => t('Evidence'))));
+    $form['evidenceurl'][$badge->bid] = array('#value' => theme('open_badges_link', $badge->evidenceurl, array('text' => t('Evidence'))));
 
     //dpm("open_badges_userweight_form: Badge {$badge->bid} badgeallowshring is {$badge->badgeallowsharing}");
     $form['badgeallowsharing'][$badge->bid] = array(
@@ -634,7 +637,7 @@ function theme_open_badges_userweight_form($form) {
 
       $subrow2[] = array('data' => drupal_render($form['issuedate'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
       $subrow2[] = array('data' => drupal_render($form['criteria'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
-      $subrow2[] = array('data' => drupal_render($form['evidence'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
+      $subrow2[] = array('data' => drupal_render($form['evidenceurl'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
 
       $subrow3[] = array('data' => drupal_render($form['expirationdate'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
       $subrow3[] = array ('data' => drupal_render($form['badgeallowsharing'][$key]), 'colspan' => 4, /*'width' => '40%'*/);
@@ -788,7 +791,7 @@ function theme_open_badges_change_form_theme($form) {
     $row[] = drupal_render($form['add']['add'. $id]);
     $row[] = drupal_render($form['add']['issuedate'. $id]);
     $row[] = drupal_render($form['add']['expirationdate'. $id]);
-    $row[] = drupal_render($form['add']['evidence'. $id]);
+    $row[] = drupal_render($form['add']['evidenceurl'. $id]);
     $rows[] = $row;
   }
   $header = array();
@@ -839,7 +842,7 @@ function open_badges_change_form(&$form_state, $account) {
       '#size' => 20,
       '#maxlength' => 30
     );
-    $form['add']['evidence'. $i] = array(
+    $form['add']['evidenceurl'. $i] = array(
       '#type' => 'textfield',
       '#title' => t('Evidence URL'),
       '#size' => 30,
@@ -931,10 +934,10 @@ function open_badges_change_form_submit($form, &$form_state) {
         $extras['expirationdate'] = strtotime($expirationdate);
       }
 
-      if (!empty($form_state['values']['evidence'. $i])) {
-        $extras['evidence'] = $form_state['values']['evidence'. $i];
+      if (!empty($form_state['values']['evidenceurl'. $i])) {
+        $extras['evidenceurl'] = $form_state['values']['evidenceurl'. $i];
       }
-      //dpm("open_badges_change_form_submit: issuedate: {$extras['issuedate']}, expirationdate: {$extras['expirationdate']}, evidence: {$extras['evidence']}");
+      //dpm("open_badges_change_form_submit: issuedate: {$extras['issuedate']}, expirationdate: {$extras['expirationdate']}, evidenceurl: {$extras['evidenceurl']}");
       open_badges_user_add_badge($uid, $validation[0], $extras);
     }
   }
@@ -1004,13 +1007,13 @@ function open_badges_user_save($edit, $uid, $quiet = TRUE) {
 }
 
 /**
- * Generate a new 'random' privateurl value (known as the assertion url in OBI documentation)
+ * Generate a new 'random' assertionurl value
  *
  * @param $uid User ID.
  * @param $bid Badge ID.
  * @param $type Whether set as part of the role ('role'), or individually assigned ('user').
  */
-function _generate_privateurl($uid, $bid, $type) {
+function _generate_assertionurl($uid, $bid, $type) {
   return sha1(rand() . $uid . $bid . $type . format_date(time()));
 }
 
@@ -1024,7 +1027,7 @@ function _generate_privateurl($uid, $bid, $type) {
  *   'type'           Whether set as part of the role ('role'), or individually assigned ('user').
  *   'issuedate'      The date the badge was issued (defaults to 'now')
  *   'expirationdate' The date the badge expires, or expired.  (defaults to 'never')
- *   'evidence'       URL for location describing what the user did to earn the badge
+ *   'evidenceurl'       URL for location describing what the user did to earn the badge
  *
  * @return bool with query success
  */
@@ -1032,25 +1035,25 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
   $type = $extras['type'];
   if (isset($extras['issuedate'])) $issuedate = $extras['issuedate']; else $issuedate = time();
   if (isset($extras['expirationdate'])) $expirationdate = $extras['expirationdate']; else $expirationdate = 0;
-  if (isset($extras['evidence'])) $evidence = $extras['evidence']; else $evidence = NULL;
+  if (isset($extras['evidenceurl'])) $evidenceurl = $extras['evidenceurl']; else $evidenceurl = NULL;
 
   $existingbadge = open_badges_get_user_badge($uid, $bid, $type);
   if ($existingbadge != NULL) {
-    $privateurl = $existingbadge->privateurl;
+    $assertionurl = $existingbadge->assertionurl;
   } else {
-    $privateurl = _generate_privateurl($uid, $bid, $type);
+    $assertionurl = _generate_assertionurl($uid, $bid, $type);
   }
   open_badges_user_remove_badge($uid, $bid, $type, FALSE);
-  // The assertion code expects to find the privateurl in a DB entry, so we can't bake
+  // The assertion code expects to find the assertionurl in a DB entry, so we can't bake
   // the badge until after the entry has been added.  Argghh!
-  $dbresult = db_query('INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, evidence, state, privateurl)
+  $dbresult = db_query('INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, evidenceurl, state, assertionurl)
                         VALUES (%d, %d, \'%s\', %d, %d, \'%s\', %d, \'%s\')',
-                        $uid, $bid, $type, $issuedate, $expirationdate, $evidence, OPEN_BADGES_STATE_EARNED, $privateurl);
+                        $uid, $bid, $type, $issuedate, $expirationdate, $evidenceurl, OPEN_BADGES_STATE_EARNED, $assertionurl);
   if ($dbresult === FALSE) {
     return $dbresult;
   }
   // XXX Always re-bake, or can we re-use an existing one in some (or all) cases?
-  return open_badges_bake_badge($uid, $bid, $privateurl, FALSE /* XXX Need to have this passed in!*/);
+  return open_badges_bake_badge($uid, $bid, $assertionurl, FALSE /* XXX Need to have this passed in!*/);
   // XXX Delete DB entry in the error case?
 }
 
@@ -1114,7 +1117,7 @@ function open_badges_get_badges($uid, $options = array()) {
       if ($usr && variable_get('open_badges_showblocked', 0)) {
         dpm("open_badges_get_badges: getting blocked users badges");
         $sql = db_query('SELECT DISTINCT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
-          b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidence,
+          b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidenceurl,
           CASE WHEN b.fixedweight = 1 THEN b.weight ELSE COALESCE(u.userweight,b.weight) END coalescedweight
           FROM {open_badges_badges} b
             INNER JOIN {open_badges_user} u ON b.bid = u.bid
@@ -1126,7 +1129,7 @@ function open_badges_get_badges($uid, $options = array()) {
       else {
         dpm("open_badges_get_badges: getting normal badge list for uid {$uid}");
         $query = 'SELECT DISTINCT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
-          b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidence,
+          b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidenceurl,
           CASE WHEN b.fixedweight = 1 THEN b.weight ELSE COALESCE(u.userweight,b.weight) END coalescedweight
           FROM {open_badges_badges} b
             INNER JOIN {open_badges_user} u ON b.bid = u.bid
@@ -1308,15 +1311,16 @@ function open_badges_get_users() {
  * Save information about roles for open_badges (in settings)
  *
  * @param $roles
- *   An array in the format rid => bid for each role/badge relationship.
+ *   An array in the format rid => badge_info for each role/badge relationship.
  */
 function open_badges_save_roles($roles) {
+  dsm($roles, "save_roles: the input roles array");
   if (is_array($roles)) {
     // We have to clear out all badges first.
-    // XXX YIKES! We need to preserve privateurl values first,
+    // XXX YIKES! We need to preserve assertionurl values first,
     // XXX or figure out how to not do this mass delete and re-add!
-    // XXX We also need to generate new privateurls where necessary
-    // XXX And add possible values for issuedate, expirationdate, and evidence
+    // XXX We also need to generate new assertionurls where necessary
+    // XXX And add possible values for issuedate, expirationdate, and evidenceurl
     // XXX This could be made less intrusive if we look to see which roles<->bid
     // XXX assignments have changed, rather than blowing away everything and
     // XXX recreating everything?!?
@@ -1326,11 +1330,33 @@ function open_badges_save_roles($roles) {
 
     // Now we loop through the roles and their badges, and assign them to
     // each user accordingly.
-    foreach ($roles as $rid => $bid) {
-      if ($bid) {
+    foreach ($roles as $rid => $info) {
+      dsm($rid, "save_roles: role id");
+      dsm($info, "save_roles: info");
+
+      if ($info['badge']) {
+        dpm("***** Processing entry for role id {$rid}, badge ID {$info['badge']} *****.");
         // First of all, insert all the role and badge relationship
         // into open_badges_roles.
-        $success = $success && db_query('INSERT INTO {open_badges_roles} (rid, bid) VALUES (%d, %d)', $rid, $bid);
+        $success = $success && db_query('INSERT INTO {open_badges_roles} (rid, bid) VALUES (%d, %d)', $rid, $info['badge']);
+
+        if (isset($info['issuedate']) && $info['issuedate'] != 'yyyy-mm-dd') {
+          $issuedate = strtotime($info['issuedate']);
+        } else {
+          $issuedate = time();
+        }
+
+        if (isset($info['expirationdate']) && $info['expirationdate'] != 'yyyy-mm-dd') {
+          $expirationdate = strtotime($info['expirationdate']);
+        } else {
+          $expirationdate = 0;
+        }
+        if (isset($info['evidenceurl'])) $evidenceurl = $info['evidenceurl']; else $evidenceurl = NULL;
+
+        // XXX Need UID to make these unique!?!?!?
+        // XXX Need to set STATE
+        // XXX Think more about this.  Perhaps, baking *should* be done during cron?
+        $assertionurl = _generate_assertionurl($uid, $info['badge'], 'role');
 
         // For all of these queries, we LEFT JOIN open_badges_user to check
         // whether there are existing entries for that badge for that user
@@ -1340,37 +1366,40 @@ function open_badges_save_roles($roles) {
         // The blocked user "role" (represented as rid 0) has no entry in
         // the users_role table, so it needs its own special query.
         if ($rid == 0) {
+          dpm("Doing an insert for blocked user");
           $success = $success && db_query("
-            INSERT INTO {open_badges_user} (uid, bid, type)
-            SELECT u.uid, %d, 'role'
+            INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, assertionurl, evidenceurl)
+            SELECT u.uid, %d, 'role', %d, %d, '%s', '%s'
             FROM {users} u
             LEFT JOIN {open_badges_user} ubu
             ON ubu.uid=u.uid AND ubu.bid=%d AND ubu.type='role'
             WHERE status = 0 AND ubu.uid IS NULL
-          ", $bid, $bid);
+          ", $info['badge'], $issuedate, $expirationdate, $assertionurl, $evidenceurl, $info['badge']);
         }
         // The authenticated user role (represented as rid 2) has no entry
         // in the users_role table, so it needs its own special query.
         elseif ($rid == 2) {
+          dpm("Doing an insert for authenticated user");
           $success = $success && db_query("
-            INSERT INTO {open_badges_user} (uid, bid, type)
-            SELECT u.uid, %d, 'role'
+            INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, assertionurl, evidenceurl)
+            SELECT u.uid, %d, 'role', %d, %d, '%s', '%s'
             FROM {users} u
             LEFT JOIN {open_badges_user} ubu
             ON ubu.uid=u.uid AND ubu.bid=%d AND ubu.type='role'
             WHERE u.uid > 0 AND ubu.uid IS NULL
-          ", $bid, $bid);
+          ", $info['badge'], $issuedate, $expirationdate, $assertionurl, $evidenceurl, $info['badge']);
         }
         // For all the normal roles, we want to run this query.
         else {
+          dpm("Doing an insert for specific user");
           $success = $success && db_query("
-            INSERT INTO {open_badges_user} (uid, bid, type)
-            SELECT ur.uid, %d, 'role'
+            INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, assertionurl, evidenceurl)
+            SELECT ur.uid, %d, 'role', %d, %d, '%s', '%s'
             FROM {users_roles} ur
             LEFT JOIN {open_badges_user} ubu
             ON ubu.uid=ur.uid AND ubu.bid=%d AND ubu.type='role'
             WHERE ur.rid=%d AND ubu.uid IS NULL
-          ", $bid, $bid, $rid);
+          ", $info['badge'], $issuedate, $expirationdate, $assertionurl, $evidenceurl, $info['badge'], $rid);
         }
       }
     }
@@ -1847,7 +1876,7 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
   $ourorigin = variable_get('open_badges_defaultissuerorigin', '');
 
   // Assemble parts of the query string
-  $query['assertion'] = $ourorigin . '/open_badges/assertion/' . $assertionpath;
+  $query['assertionurl'] = $ourorigin . '/open_badges/assertion/' . $assertionpath;
   // XXX For now, leave this off, since the default is NOT to share!
   // XXX $query['award'] = $sendtobackpack ? "true" : "false";
   $data = http_build_query($query, '', '&');
@@ -1887,7 +1916,7 @@ function open_badges_bake_badges() {
                       LEFT JOIN {open_badges_permissions} obp ON obu.uid = obp.uid
                       WHERE state = %d', OPEN_BADGES_STATE_EARNED);
   while (($badge = db_fetch_object($result)) != NULL) {
-    open_badges_bake_badge($badge->uid, $badge->bid, $badge->privateurl, (bool) $badge->userallowsharing == OPEN_BADGES_USER_DECISION_YES);
+    open_badges_bake_badge($badge->uid, $badge->bid, $badge->assertionurl, (bool) $badge->userallowsharing == OPEN_BADGES_USER_DECISION_YES);
   }
 }
 
@@ -1972,14 +2001,14 @@ function open_badges_process_assertion_request($fullurl) {
   //dpm("open_badges_process_assertion_request: entered!");
   $fullurl = trim($fullurl);
   $j = stripos($fullurl, '.json');
-  $assertion = $j !== FALSE ? substr($fullurl, 0, $j) : $fullurl;
+  $assertionurl = $j !== FALSE ? substr($fullurl, 0, $j) : $fullurl;
 
   $result = db_query('SELECT * FROM {open_badges_user} obu
                       LEFT JOIN {users} u ON obu.uid = u.uid
                       LEFT JOIN {open_badges_badges} obb ON obu.bid = obb.bid
-                      WHERE obu.privateurl LIKE \'%s\'', $assertion);
+                      WHERE obu.assertionurl LIKE \'%s\'', $assertionurl);
   //dpm("The result of the query is " . ($result == NULL ? "NULL" : $result));
-  //dsm($result, "The result of the database query for the private url {$url}");
+  //dsm($result, "The result of the database query for the assertion url {$url}");
   // If we don't have the requested assertion URL, politely tell them to go away
   $count = 0;
   $info = NULL;
@@ -1994,13 +2023,13 @@ function open_badges_process_assertion_request($fullurl) {
     return t('System error: multiple matching assertion URLs');
   }
   //dsm($info, "The returned information");
-  //dpm("You have supplied private url '{$url}' and count is {$count}");
+  //dpm("You have supplied assertion url '{$url}' and count is {$count}");
 
   // Compile the assertion
   $a = array();
   $a['recipient'] = $info->mail;
-  if ($info->evidence != '') {
-    $a['evidence'] = $info->evidence;
+  if ($info->evidenceurl != '') {
+    $a['evidenceurl'] = $info->evidenceurl;
   }
   if ($info->expirationdata != 0) {
     $a['expires'] = format_date($info->expirationdate, 'custom', 'Y-m-d');

@@ -214,7 +214,7 @@ function open_badges_schema() {
         'not null' => TRUE,
         'default' => OPEN_BADGES_USER_DECISION_NONE,
         ),
-      'privateurl' => array(
+      'assertionurl' => array(
         'description' => t('Private, non-deterministic, persistent URL given to Mozilla OBI when "baking" a badge.'),
         'type' => 'varchar',
         'length' => 255,
@@ -228,7 +228,7 @@ function open_badges_schema() {
         'not null' => TRUE,
         'default' => '',
         ),
-      'evidence' => array(
+      'evidenceurl' => array(
         'description' => t('URL with information about how this user earned this badge.'),
         'type' => 'varchar',
         'length' => 255,
@@ -258,7 +258,7 @@ function open_badges_schema() {
       'uid_bid' => array('uid', 'bid'),
       'uid_weight' => array('uid', 'userweight'),
       'type' => array('type'),
-      'privateurl' => array('privateurl'),
+      'assertionurl' => array('assertionurl'),
       ),
     );
 

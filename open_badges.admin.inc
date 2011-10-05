@@ -159,6 +159,62 @@ function theme_open_badges_badgelist_form($form) {
 }
 
 /**
+ * Theme the open badges roles form.
+ *
+ * @param $form
+ *   An associative array containing the structure of the form.
+ * @ingroup themeable
+ */
+function theme_open_badges_roles_form($form) {
+  dsm($form, "theme_open_badges_roles_form: entered");
+  $output = '';
+
+  $rows = array();
+  $row = array();
+  $row[] = drupal_render($form['blocked'][0]['badge']);
+  $row[] = drupal_render($form['blocked'][0]['issuedate']);
+  $row[] = drupal_render($form['blocked'][0]['expirationdate']);
+  $row[] = drupal_render($form['blocked'][0]['evidenceurl']);
+  $rows[] = $row;
+  $form['blocked']['#children'] = theme('table', $form['header']['#value'], $rows);
+
+  // Loop through the array items in the name array to get all the bids for our listed badges.
+  if (isset($form['roles']) && is_array($form['roles'])) {
+    $rows = array();
+    foreach (element_children($form['roles']) as $key) {
+      //We only want rids as values of $key
+      if (!is_numeric($key)) {
+        continue;
+      }
+
+      // Create the rows array for the table theme.
+      $row = array();
+      $row[] = drupal_render($form['roles'][$key]['badge']);
+      $row[] = drupal_render($form['roles'][$key]['issuedate']);
+      $row[] = drupal_render($form['roles'][$key]['expirationdate']);
+      $row[] = drupal_render($form['roles'][$key]['evidenceurl']);
+      $rows[] = $row;
+    }
+  }
+  else {
+    $rows[] = array(array('data' => t('No roles defined.'), 'colspan' => '5'));
+  }
+
+  // Theme all that we have processed so far into a table.
+  $form['roles']['#children'] = theme('table', $form['header']['#value'], $rows);
+
+  // Create the table's pager.
+  if ($form['pager']['#value']) {
+    $output .= drupal_render($form['pager']);
+  }
+
+  // Render any remaining form elements.
+  $output .= drupal_render($form);
+
+  return $output;
+}
+
+/**
  * Define the edit form for userbadges.
  */
 function open_badges_edit_form($form_state, $bid = NULL) {
@@ -463,7 +519,7 @@ function open_badges_bulkedit_form($form_state, $bid = NULL) {
       '#size' => 20,
       '#maxlength' => 30
     );
-    $form['evidence'] = array(
+    $form['evidenceurl'] = array(
       '#type' => 'textfield',
       '#title' => t('Evidence URL'),
       '#size' => 30,
@@ -579,8 +635,8 @@ function open_badges_bulkedit_form_submit($form, &$form_state) {
       $extras['expirationdate'] = strtotime($expirationdate);
     }
 
-    if (!empty($form_state['values']['evidence'])) {
-      $extras['evidence'] = $form_state['values']['evidence'];
+    if (!empty($form_state['values']['evidenceurl'])) {
+      $extras['evidenceurl'] = $form_state['values']['evidenceurl'];
     }
 
     dpm("Should be adding " . count($form_state['values']['addrecipients']) . ' new users');
@@ -759,7 +815,7 @@ function open_badges_roles_form() {
     '#collapsed' => FALSE,
     '#tree' => TRUE,
   );
-  $form['blocked'][0] = array(
+  $form['blocked'][0]['badge'] = array(
     '#type' => 'textfield',
     '#title' => t('blocked user'),
     '#size' => 40,
@@ -767,6 +823,28 @@ function open_badges_roles_form() {
     '#autocomplete_path' => 'open_badges/autocomplete',
     '#default_value' => isset($badges[0]) ? $badges[0]->name . ' ' . t('(Badge ID') . ' ' . $badges[0]->bid .')' : '',
     '#field_suffix' => isset($badges[0]) ? ' ' . t('Current:') . ' ' . $badges[0]->image : '',
+  );
+  $form['blocked'][0]['issuedate'] = array(
+    '#type' => 'textfield',
+    '#default_value' => 'yyyy-mm-dd',
+    '#title' => t('Issue Date'),
+    '#description' => t('Defaults to \'now\''),
+    '#size' => 20,
+    '#maxlength' => 30
+  );
+  $form['blocked'][0]['expirationdate'] = array(
+    '#type' => 'textfield',
+    '#default_value' => 'yyyy-mm-dd',
+    '#title' => t('Expiration Date'),
+    '#description' => t('Defaults to \'never\''),
+    '#size' => 20,
+    '#maxlength' => 30
+  );
+  $form['blocked'][0]['evidenceurl'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Evidence URL'),
+    '#size' => 30,
+    '#maxlength' => 255
   );
 
   $form['roles'] = array(
@@ -777,8 +855,11 @@ function open_badges_roles_form() {
     '#tree' => TRUE,
   );
 
+  $rows = array();
   foreach ($roles as $rid => $role) {
-    $form['roles'][$rid] = array(
+    $form['roles'][$rid] = array();
+
+    $form['roles'][$rid]['badge'] = array(
       '#type' => 'textfield',
       '#title' => $role,
       '#maxlength' => 255,
@@ -788,6 +869,28 @@ function open_badges_roles_form() {
       '#field_suffix' => isset($badges[$rid]) ?
         ' ' . t('Current:') . ' ' . $badges[$rid]->image : '',
       );
+    $form['roles'][$rid]['issuedate'] = array(
+      '#type' => 'textfield',
+      '#default_value' => 'yyyy-mm-dd',
+      '#title' => t('Issue Date'),
+      '#description' => t('Defaults to \'now\''),
+      '#size' => 20,
+      '#maxlength' => 30
+    );
+    $form['roles'][$rid]['expirationdate'] = array(
+      '#type' => 'textfield',
+      '#default_value' => 'yyyy-mm-dd',
+      '#title' => t('Expiration Date'),
+      '#description' => t('Defaults to \'never\''),
+      '#size' => 20,
+      '#maxlength' => 30
+    );
+    $form['roles'][$rid]['evidenceurl'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Evidence URL'),
+      '#size' => 30,
+      '#maxlength' => 255
+    );
   }
 
   $form[] = array(
@@ -801,29 +904,51 @@ function open_badges_roles_form() {
  * validation function for open_badges_roles_form
  */
 function open_badges_roles_form_validate($form, &$form_state) {
+  dsm($form_state, "roles_form_validate: form_state");
   $array = $form_state['values']['roles'] + $form_state['values']['blocked'];
   // Go through all the entries and make sure they all have a valid badge ID.
-  foreach ($array as $field => $value) {
-    if (!empty($value)) {
+  foreach ($array as $field => $values) {
+    dsm($field, "roles_form_validate: The field");
+    dsm($values, "roles_form_validate: The values");
+    if (!empty($values['badge'])) {
       // The field isn't empty, so we should validate it.
-      $validation = open_badges_badge_autocomplete_validation($value);
+      $validation = open_badges_badge_autocomplete_validation($values['badge']);
       //Is it correctly formatted?
       if ($validation[1] == 'string') {
         if ($field == 0) {
-          form_set_error('blocked]['. $field, t('"@value" is not a valid badge name. Try using the autocomplete function (requires javascript).', array('@value' => $value)));
+          form_set_error('blocked]['. $field. '][badge', t('"@value" is not a valid badge name. Try using the autocomplete function (requires javascript).', array('@value' => $values['badge'])));
         }
         else {
-          form_set_error('roles]['. $field, t('"@value" is not a valid badge name. Try using the autocomplete function (requires javascript).', array('@value' => $value)));
+          form_set_error('roles]['. $field. '][badge', t('"@value" is not a valid badge name. Try using the autocomplete function (requires javascript).', array('@value' => $values['badge'])));
         }
       }
-      // The format was correct, but we need to check the bid exists.
+      // The format was correct, but we need to check if the bid exists.
       elseif ($validation[1] == 'nobid') {
         if ($field == 0) {
-          form_set_error('blocked]['. $field, t('@value is not a valid badge ID. Try using the autocomplete function (requires javascript).', array('@value' => $validation[0])));
+          form_set_error('blocked]['. $field. '][badge', t('@value is not a valid badge ID. Try using the autocomplete function (requires javascript).', array('@value' => $validation[0])));
         }
         else {
-          form_set_error('roles]['. $field, t('@value is not a valid badge ID. Try using the autocomplete function (requires javascript).', array('@value' => $validation[0])));
+          form_set_error('roles]['. $field. '][badge', t('@value is not a valid badge ID. Try using the autocomplete function (requires javascript).', array('@value' => $validation[0])));
         }
+      }
+      // Verify dates if something other than the default
+      if (!empty($values['issuedate']) && $values['issuedate'] != 'yyyy-mm-dd') {
+        if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $values['issuedate'])) {
+          if ($field == 0) {
+            form_set_error('blocked]['. $field . '][issuedate', t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $values['issuedate'])));
+          } else {
+            form_set_error('roles][' . $field . '][issuedate', t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $values['issuedate'])));
+          }
+        }
+      }
+      if (!empty($values['expirationdate']) && $values['expirationdate'] != 'yyyy-mm-dd') {
+        if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $values['expirationdate'])) {
+          if ($field == 0) {
+            form_set_error('blocked]['. $field . '][expirationdate', t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $values['expirationdate'])));
+          } else {
+            form_set_error('roles][' . $field . '][expirationdate', t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $values['expirationdate'])));
+          }
+                  }
       }
     }
   }
@@ -834,11 +959,12 @@ function open_badges_roles_form_validate($form, &$form_state) {
  */
 function open_badges_roles_form_submit($form, &$form_state) {
   $array = $form_state['values']['roles'] + $form_state['values']['blocked'];
-  foreach ($array as $field => &$value) {
+  dsm($array, "The array formed after combining 'roles' and 'blocked'");
+  foreach ($array as $field => &$values) {
     // We now have a string as our badge, so just extract the bid.
-    preg_match('/\('. t('Badge ID') .' (\d+)\)/', $value, $matches);
+    preg_match('/\('. t('Badge ID') .' (\d+)\)/', $values['badge'], $matches);
     // Transform our value into just the bid.
-    $value = $matches[1];
+    $values['badge'] = $matches[1];
   }
   open_badges_save_roles($array);
 }
