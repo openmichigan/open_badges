@@ -56,7 +56,9 @@ function open_badges_badgelist_form() {
     $num_recipients = count($recipients);
     array_unshift($recipients, t('There are @count recipients', array('@count' => $num_recipients)));
     if ($num_recipients > 5) {
-      array_splice(&$recipients, 6, $num_recipients, l(t('more...'), 'admin/user/open_badges/bulkedit/'. $badge->bid));
+      array_splice(&$recipients, 6, $num_recipients, l(t('add/remove'), 'admin/user/open_badges/recipients/'. $badge->bid));
+    } else {
+      $recipients[] = l(t('add/remove'), 'admin/user/open_badges/recipients/'. $badge->bid);
     }
     $form['recipients'][$badge->bid] = array('#value' => implode('<br />', $recipients));
 
@@ -476,8 +478,8 @@ function open_badges_edit_form_submit($form, &$form_state) {
 /**
  * Define the bulk edit form for open badges.
  */
-function open_badges_bulkedit_form($form_state, $bid = NULL) {
-  //dpm("open_badges_bulkedit_form: entered, bid is {$bid}");
+function open_badges_recipients_form($form_state, $bid = NULL) {
+  //dpm("open_badges_recipients_form: entered, bid is {$bid}");
   $form = array();
   $title = '';
 
@@ -594,7 +596,7 @@ function open_badges_bulkedit_form($form_state, $bid = NULL) {
   return $form;
 }
 
-function open_badges_bulkedit_form_validate($form, &$form_state) {
+function open_badges_recipients_form_validate($form, &$form_state) {
   // Verify dates if something other than the default
   if (!empty($form_state['values']['issuedate']) && $form_state['values']['issuedate'] != 'yyyy-mm-dd') {
     if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $form_state['values']['issuedate'])) {
@@ -608,15 +610,15 @@ function open_badges_bulkedit_form_validate($form, &$form_state) {
   }
 }
 
-function open_badges_bulkedit_form_submit($form, &$form_state) {
-  dpm("open_badges_bulkedit_form_submit: entered");
+function open_badges_recipients_form_submit($form, &$form_state) {
+  dpm("open_badges_recipients_form_submit: entered");
 
   //dsm($form, "The form array");
   //dsm($form_state, "The form_state array");
 
   if (preg_match('/\('. t('Badge ID') .' (\d+)\)/', $form_state['values']['badgeid'], $matches)) {
     $bid = $matches[1];
-    $form_state['redirect'] = 'admin/user/open_badges/bulkedit/' . $bid;
+    $form_state['redirect'] = 'admin/user/open_badges/recipients/' . $bid;
     return;
   } else if (preg_match('/\('. t('Badge ID') .' (\d+)\)/', $form_state['values']['submittedbadgeid'], $matches)) {
     dpm("We have a submission to change:" . $matches[0] . ":" . $matches[1] . ":");
@@ -669,11 +671,11 @@ function open_badges_bulkedit_form_submit($form, &$form_state) {
       }
     }
 
-    $form_state['redirect'] = 'admin/user/open_badges/bulkedit/' . $bid;
+    $form_state['redirect'] = 'admin/user/open_badges/recipients/' . $bid;
   } else {
     // XXX Should have a validate function to check this?!?
     drupal_set_message(t('Could not determine the Badge ID to be processed.'));
-    $form_state['redirect'] = 'admin/user/open_badges/bulkedit';
+    $form_state['redirect'] = 'admin/user/open_badges/recipients';
     return;
   }
 }
@@ -685,7 +687,7 @@ function open_badges_bulkedit_form_submit($form, &$form_state) {
 function open_badges_images_form($form_state) {
   $form = array('#skip_duplicate_check' => TRUE);
   if (module_exists('upload')) {
-    $form['new']['upload'] = array('#type' => 'file', '#title' => t('Upload image'), '#size' => 40);
+    $form['new']['upload'] = array('#type' => 'file', '#title' => t('Upload image'), '#description' => t('(Must be PNG; Max size of 256KB)'), '#size' => 40);
     $form['new']['attach'] = array('#type' => 'submit', '#value' => t('Upload'));
   }
   else {
@@ -729,12 +731,13 @@ function open_badges_images_form_validate($form, &$form_state) {
     $is_writable = file_check_directory($dir, 1);
     if ($is_writable) {
       $validators = array(
-        'file_validate_extensions' => array('png'),  // jpg jpeg gif
+        'file_validate_extensions' => array('png'),
+        'file_validate_size' => array(262144),
       );
       if ($file = file_save_upload('upload', $validators, $dir)) {
         if (!image_get_info($file->filepath)) {
           file_delete($file->filepath);
-          form_set_error('upload', t('Uploaded image file does not appear to be a valid PNG image file.  Please try again'));
+          form_set_error('upload', t('Uploaded image file does not appear to be a valid PNG image file, or is larger than 256kb.  Please try again'));
         }
         else {
           open_badges_hold_temporary_file($file);
@@ -774,7 +777,7 @@ function open_badges_images_form_submit($form, &$form_state) {
   // Save uploaded files.
   if ($op == t('Upload')) {
     $file = $form_state['values']['file_image'];
-    dsm($file, "The file uploaded file");
+    dsm($file, "open_badges_images_form_submit: The uploaded file");
     file_set_status($file, FILE_STATUS_PERMANENT);
   }
   elseif ($op == t('Delete')) {
@@ -1244,8 +1247,7 @@ function open_badges_settings_form_submit($form, $form_state) {
 function open_badges_image_selects() {
   $selects = array();
   $dir = file_create_path('open_badges');
-  // XXX Limit this to only PNG, which is the only thing accepted by Mozilla OBI
-  //$files = file_scan_directory($dir, '.*\.(((J|j)(p|P)(g|G))|((p|P)(n|N)(g|G))|((g|G)(i|I)(f|F)))', array('.', '..', 'CVS'), 0, FALSE);
+  // Limit this to only PNG, which is the only thing accepted by Mozilla OBI
   $files = file_scan_directory($dir, '.*\.((p|P)(n|N)(g|G))', array('.', '..', 'CVS'), 0, FALSE);
   foreach ($files as $file) {
     $selects[$file->filename] = theme('image', $file->filename, $file->filename, $file->filename);

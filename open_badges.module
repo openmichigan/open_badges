@@ -27,8 +27,8 @@ function open_badges_help($path, $arg) {
     case 'admin/user/open_badges':
       return t('User badges are iconic images which can be assigned to users. They can represent accomplishments, status, or anything you\'d like. These badges will show up in the user\'s profile, and could also be used by a theme to appear with user postings on forums, comments, or nodes. Badges can be assigned manually by an administrator by visiting a user\'s profile. They also can be assigned automatically by role or ecommerce purchase (if ecommerce modules are installed). The excellent !link module can also be used to set and unset badges on a wide variety of conditions.', array('!link' => l('Rules', 'http://drupal.org/project/rules', array('absolute' => TRUE))));
 
-    case 'admin/user/open_badges/roles':
-      return t("Select the badge that you'd like to associate with each role.");
+    //case 'admin/user/open_badges/roles':
+    //  return t("Select the badge that you'd like to associate with each role.");
 
     case 'admin/user/open_badges/images':
       return t("This is the open badges image library. Note that this area is not functional if you have private download active. Here you can upload images to display as a open badge, but you can also enter image URLs directly in the badge form, so this area is optional. The images can be anything you like, but it is recommended that you maintain a uniform icon size for all of your badges. Keep in mind that a user may have many badges displayed so you'll probably want to keep them as small as possible (like 16x16 pixels or smaller).");
@@ -107,6 +107,7 @@ function open_badges_menu() {
     'file' => 'open_badges.admin.inc',
     );
 
+/* XXX --- Don't support roles stuff for now! --- XXX
   $items['admin/user/open_badges/roles'] = array(
     'title' => 'Roles',
     'page callback' => 'drupal_get_form',
@@ -115,7 +116,7 @@ function open_badges_menu() {
     'type' => MENU_LOCAL_TASK,
     'file' => 'open_badges.admin.inc',
     );
-
+*/
   $items['admin/user/open_badges/settings'] = array(
     'title' => 'Settings',
     'page callback' => 'drupal_get_form',
@@ -125,19 +126,19 @@ function open_badges_menu() {
     'file' => 'open_badges.admin.inc',
     );
 
-  $items['admin/user/open_badges/bulkedit/%'] = array(
+  $items['admin/user/open_badges/recipients/%'] = array(
     'title' => 'Recipients',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('open_badges_bulkedit_form', 4),
+    'page arguments' => array('open_badges_recipients_form', 4),
     'access arguments' => $access,
     'type' => MENU_LOCAL_TASK,
     'file' => 'open_badges.admin.inc',
     );
 
-  $items['admin/user/open_badges/bulkedit'] = array(
+  $items['admin/user/open_badges/recipients'] = array(
     'title' => 'Recipients',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('open_badges_bulkedit_form', NULL),
+    'page arguments' => array('open_badges_recipients_form', NULL),
     'access arguments' => $access,
     'type' => MENU_LOCAL_TASK,
     'file' => 'open_badges.admin.inc',
@@ -257,9 +258,8 @@ function open_badges_user($op, &$edit, &$account, $category = 'account') {
       }
 
       // Cache both lists (the full list and the limited list)
-      // XXX Caching breaks the display of open_badges_userweight_form after submission??
-      //$badges_all[$account->uid] = $account->badges_all;
-      //$badges[$account->uid] = $account->badges;
+      $badges_all[$account->uid] = $account->badges_all;
+      $badges[$account->uid] = $account->badges;
       break;
 
     case 'insert':
@@ -413,7 +413,6 @@ function open_badges_userweight_form(&$form_state, $account) {
   $allbadges = $account->badges_all;
   $delta = 0;
   $form = array('#tree' => TRUE);
-  //cache_clear_all(NULL, 'cache_form'); // XXX temporary! XXX
   //dsm($allbadges, "open_badges_userweight_form: The list of all badges");
   //dsm($form_state, "open_badges_userweight_form: The incoming form_state");
 
@@ -670,8 +669,6 @@ function theme_open_badges_userweight_form($form) {
 
   // Render any remaining form elements
   $output .= drupal_render($form);
-
-  // XXX$output .= drupal_render($form['submit']);
 
   return $output;
 
@@ -1054,7 +1051,9 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
   }
   // XXX Always re-bake, or can we re-use an existing one in some (or all) cases?
   return open_badges_bake_badge($uid, $bid, $assertionurl, FALSE /* XXX Need to have this passed in!*/);
-  // XXX Delete DB entry in the error case?
+  // XXX Delete DB entry in the error case!!!!
+  // XXX Delete DB entry in the error case!!!!
+  // XXX Delete DB entry in the error case!!!!
 }
 
 
@@ -1069,6 +1068,7 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
  */
 function open_badges_user_remove_badge($uid, $bid, $type = NULL, $tellOBI = FALSE) {
   // XXX Need to remove baked image from filesystem!   Need to do a query to find out filename :-/
+  // XXX If shared with OBI, need to re-bake with expiration date
   if (is_null($type)) {
     return db_query('DELETE FROM {open_badges_user} WHERE uid=%d AND bid=%d', $uid, $bid);
   }
@@ -1189,7 +1189,7 @@ function open_badges_get_badges($uid, $options = array()) {
 function open_badges_get_badge_recipients($bid) {
   static $recipients = array();
 
-  dpr("open_badges_get_badge_recipients: entered");
+  dpm("open_badges_get_badge_recipients: entered");
   // Return cached value if we get called multiple times for some reason
   if (isset($recipients[$bid])) {
     return $recipients[$bid];
@@ -1202,6 +1202,7 @@ function open_badges_get_badge_recipients($bid) {
   while ($r = db_fetch_object($sql)) {
     $recipients[$bid][] = $r;
   }
+  dsm($recipients[$bid], "open_badges_get_badge_recipients: returning");
   return $recipients[$bid];
 }
 
@@ -1587,16 +1588,14 @@ function open_badges_add_badge_action(&$account, $context = array()) {
   }
   $success = TRUE;
   $badges = open_badges_get_badges('all');
-  $loadeduser = user_load($uid);
-  dsm($loadeduser, "The loaded user for uid " . $uid);
 
   foreach ($context['badges'] as $bid) {
     $success = (boolean) open_badges_user_add_badge($uid, $bid, array('type' => 'user'));
     if ($success) {
-      watchdog('action', 'Added open badge %badge to user %name.', array('%name' => check_plain($loadeduser->name), '%badge' => check_plain($badges[$bid]->name)));
+      watchdog('action', 'Added open badge %badge to user %uid.', array('%uid' => $uid, '%badge' => $bid));
     }
     else {
-      watchdog('action', 'Unable to add open badge %badge to user %name.', array('%name' => check_plain($loadeduser->name), '%badge' => check_plain($badges[$bid]->name)), WATCHDOG_WARNING);
+      watchdog('action', 'Unable to add open badge %badge to user %uid.', array('%uid' => $uid, '%badge' => $bid), WATCHDOG_WARNING);
     }
   }
 }
@@ -1842,7 +1841,6 @@ function _baked_badge_dir() {
 /**
  * Save a baked badge image and update the database
  *
- * XXX May want to change this to save in a file, since we may want to use the baked image for display?
  */
 function _save_baked_badge($assertionpath, $badgeblob) {
   $path = _baked_badge_path($assertionpath);
@@ -1862,7 +1860,7 @@ function _update_badge_state_and_bakedimage($uid, $bid, $newstate, $bakedimage) 
   $result =  db_query('UPDATE {open_badges_user} SET state = %d, bakedimage = \'%s\' WHERE uid = %d AND bid = %d',
                       $newstate, $bakedimage, $uid, $bid);
   //dpm("The db state and bakedimage update returned '{$result}'");
-  //dsm($result, "The result of _update_badges_state_and_bakedimage");
+  dsm($result, "The result of _update_badges_state_and_bakedimage");
   return ($result === FALSE ? FALSE : TRUE);
 }
 
@@ -1871,41 +1869,50 @@ function _update_badge_state_and_bakedimage($uid, $bid, $newstate, $bakedimage) 
  */
 function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALSE) {
   $headers = array();
-  $query = array();
+  $queryarray = array();
   // Assertion URL must be absolute
   $ourorigin = variable_get('open_badges_defaultissuerorigin', '');
 
-  // Assemble parts of the query string
-  $query['assertion'] = $ourorigin . '/open_badges/assertion/' . $assertionpath;
+  // Construct the query string
+  $queryarray['assertion'] = $ourorigin . '/open_badges/assertion/' . $assertionpath;
   // XXX For now, leave this off, since the default is NOT to share!
   // XXX $query['award'] = $sendtobackpack ? "true" : "false";
-  $data = http_build_query($query, '', '&');
+  $querystring = http_build_query($queryarray, '', '&');
   // Add the query string to the url, it is not 'data'!
   $bakerserviceurl = variable_get('open_badges_badgebakingurl', '');
-  $bakerserviceurl .= '?' . $data;
+  $bakerserviceurl .= '?' . $querystring;
 
-  //dpm("The baker url is '{$bakerserviceurl}'");
+  dpm("open_badges_bake_badge: The baker url is '{$bakerserviceurl}'");
+
   $bakeresult = drupal_http_request($bakerserviceurl, $headers, 'GET', NULL);
-  //dsm($bakeresult, "The result from the get request for baking");
+
+  dsm($bakeresult, "open_badges_bake_badge: The result from the get request for baking");
+
   if ($bakeresult->code > 200) {
     drupal_set_message("Error {$bakeresult->code}, baking badge {$bid} for uid {$uid}", 'error');
     watchdog('error', "Error from baking service for uid @uid and badge @bid : @code : @message : @reason",
              array('@uid' => $uid, '@bid' => $bid, '@code' => $bakeresult->code,
              '@message' => $bakeresult->error, '@reason' => $bakeresult->data), WATCHDOG_WARNING);
     return FALSE;
-  } else {
-    $bakedimage = _save_baked_badge($assertionpath, $bakeresult->data);
-    //dsm($bakedimage, "open_badges_bake_badge: The filename returned from _save_baked_badge");
-    if ($bakedimage === FALSE) {
-      //dpm("open_badges_bake_badge: failed to save the baked badge to a file");
-      return FALSE;
-    }
-
-    // XXX Need to check for header indicating whether it was successfully sent
-    // XXX to backpack or not, so that we can set the proper state!
-    $newstate = OPEN_BADGES_STATE_BAKED;
-    return _update_badge_state_and_bakedimage($uid, $bid, $newstate, $bakedimage);
   }
+
+  $bakedimage = _save_baked_badge($assertionpath, $bakeresult->data);
+  dsm($bakedimage, "open_badges_bake_badge: The filename returned from _save_baked_badge");
+  if ($bakedimage === FALSE) {
+    drupal_set_message("Error saving baked badge to path {$assertionpath} for uid {$uid} and badge {$bid}.", 'error');
+    watchdog('error', "Error saving baked badge to path @path for uid @uid and badge @bid.",
+             array('@uid' => $uid, '@bid' => $bid, '@path' => $assertionpath), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  // Check for header indicating whether it was successfully sent to the backpack (if requested)
+  $newstate = OPEN_BADGES_STATE_BAKED;
+  if ($sendtobackpack === TRUE) {
+    if (isset($bakeresult['headers']['x-badge-awarded']) && $bakeresult['headers']['x-badge-awarded'] == 'true') {
+      $newstate = OPEN_BADGES_STATE_BAKED_AND_SHARED;
+    }
+  }
+  return _update_badge_state_and_bakedimage($uid, $bid, $newstate, $bakedimage);
 }
 
 /**
@@ -1940,6 +1947,9 @@ function open_badges_notify_new_recipients() {
 
   $current_uid = -1;
   $first_entry = TRUE;
+  $params = array();
+  $params['badgecount'] = 0;
+  $key = '';
 
   while (($badge = db_fetch_object($result)) != NULL) {
     dsm($badge, "A baked badge whose recipient needs to be notified");
@@ -1949,28 +1959,67 @@ function open_badges_notify_new_recipients() {
         $first_entry = FALSE;
       } else {
         // We are processing a new UID, send off the message we've composed for the previous user
-        dpm("WOULD BE Sending message for uid {$current_uid} with {$params['badgecount']} badges");
-// XXX     $message = drupal_mail('open_badges_notify', $key, $badge->mail, $language, $params, $from);
+        $message = _open_badges_send_mimemail($key, $params);
+        //XXX Update entry to indicate they've been notified (if the email works)
       }
       dpm("Initializing for a new user: {$badge->uid}");
       $params = array();
       $params['badgecount'] = 0;
-      $params['bakedbadge'] = array();
+      $params['attachments'] = array();
       $current_uid = $badge->uid;
       $account = user_load($current_uid);
-      $language = user_preferred_language($account);
       $params['account'] = $account;
       // This should be the same for all badges for the same user?
       $key = $badge->state == OPEN_BADGES_STATE_BAKED ? 'notshared' : 'shared';
-      $first_entry = FALSE;
     }
-    dpm("Adding a baked image for uid {$current_uid}");
-    $params['bakedbadge'][] = $badge->bakedimage; // Each bakedbadge will be added as an attachment
+    dpm("Adding a baked image {$badge->bakedimage} for uid {$current_uid}");
+    $attachment = array();
+    $attachment['filepath'] = '/' . $badge->bakedimage;
+    $attachment['filecontent'] = NULL;
+    $attachment['filename'] = 'badge_' . ($params['badgecount'] + 1) . '.png'; // Do another join and get badge name?
+    $attachment['filemime'] = 'image/png';
+    $params['attachments'][] = $attachment;
     $params['badgecount']++;
   }
   // Send off the last message we've composed
-  dpm("WOULD BE Sending final message for uid {$current_uid} with {$params['badgecount']} badges");
-//XXX $message = drupal_mail('open_badges_notify', $key, $badge->mail, $language, $params, $from);
+  $message = _open_badges_send_mimemail($key, $params);
+  //XXX Update entry to indicate they've been notified (if the email works)
+}
+
+/**
+ * Use mimemail to send notification email
+ */
+function _open_badges_send_mimemail($key, $params) {
+  dpm("_open_badges_send_mimemail: entered!");
+  dsm($params, "_open_badges_send_mimemail: params");
+  $sender = variable_get('open_badges_fromaddress', NULL);
+  $recipient = $params['account'];
+  $subject = variable_get('open_badges_subject', t('You have earned a new badge!'));
+  $headers = array();
+  switch ($key) {
+    case 'shared':
+      $body = variable_get('open_badges_bodyshared', '');
+      break;
+    case 'notshared':
+      $body = variable_get('open_badges_bodynotshared', '');
+      break;
+  }
+  $attachments = $params['attachments'];
+
+  dsm($params, "The params used to populate parameters for mimemail");
+  dsm($sender, "The sender of the email");
+  dsm($recipient, "The recipient of the email");
+  // XXX Temporary while debugging...
+  if ($recipient->uid != 18) {
+    dpm("_open_badges_send_mimemail: NOT SENDING email for user {$recipient->name}, {$recipient->uid}");
+    drupal_set_message("NOT SENDING email for user {$recipient->name}, {$recipient->uid}", 'error');
+    return FALSE;
+  }
+  dpm("_open_badges_send_mimemail: SENDING email for user {$recipient->name}, {$recipient->uid}");
+
+  $sentmsg = mimemail($sender, $recipient, $subject, $body, NULL, $headers, NULL, $attachments);
+  dsm($sentmsg, "The email sent");
+  return $sentmsg;
 }
 
 /**
@@ -2072,7 +2121,7 @@ function open_badges_process_assertion_request($fullurl) {
  */
 function open_badges_cron() {
   //open_badges_bake_badges();
-  //open_badges_notify_new_recipients();
+  open_badges_notify_new_recipients();
 
  /*
   * UNCOMMENT in order to get Open Badges to work along with Auto Assign Role
