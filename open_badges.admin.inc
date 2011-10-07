@@ -19,7 +19,7 @@
  * Form builder; list of badges
  */
 function open_badges_badgelist_form() {
-  // dpm("open_badges_badgelist_form: entered");
+  //dpm("open_badges_badgelist_form: entered");
   // Load the badges that we want to display.
   $form['header'] = array('#type' => 'value', '#value' => array(
     array('data' => t('Name'), 'field' => 'name'),
@@ -36,7 +36,7 @@ function open_badges_badgelist_form() {
 
   // Build a table listing the appropriate badges.
   while ($badge = db_fetch_object($result)) {
-    // dsm($badge, "open_badges_badgelist_form: badge");
+    //dpm($badge, "open_badges_badgelist_form: badge");
     $badge->class = 'badge ' . _open_badges_class($badge);
     $form['name'][$badge->bid] = array('#value' => check_plain($badge->name));
     $form['badge'][$badge->bid] = array('#value' => theme('open_badge', $badge));
@@ -49,7 +49,7 @@ function open_badges_badgelist_form() {
     // Get a list of all the recipients of this badge
     $recipients = array();
     $all_r = open_badges_get_badge_recipients($badge->bid);
-    //dsm($all_r, "All recipients returned from open_badges_get_badge_recipients");
+    //dpm($all_r, "All recipients returned from open_badges_get_badge_recipients");
     for($i = 0; $i < count($all_r); $i++) {
       $recipients[] = $all_r[$i]->name . ' (' . $all_r[$i]->type . ')';
     }
@@ -69,7 +69,7 @@ function open_badges_badgelist_form() {
 
   $form['pager'] = array('#value' => theme('pager', NULL, 50, 0));
 
-  //dsm($form, "open_badges_badgelist_form: The form that has been built");
+  //dpm($form, "open_badges_badgelist_form: The form that has been built");
   return $form;
 }
 
@@ -113,7 +113,7 @@ function open_badges_badgelist_form_submit($form, &$form_state) {
  * @ingroup themeable
  */
 function theme_open_badges_badgelist_form($form) {
-  // dpm("theme_open_badges_badgelist_form: entered");
+  //dpm("theme_open_badges_badgelist_form: entered");
   $output = '';
 
   // Loop through the array items in the name array to get all the bids for our listed badges.
@@ -168,7 +168,7 @@ function theme_open_badges_badgelist_form($form) {
  * @ingroup themeable
  */
 function theme_open_badges_roles_form($form) {
-  dsm($form, "theme_open_badges_roles_form: entered");
+  //dpm($form, "theme_open_badges_roles_form: entered");
   $output = '';
 
   $rows = array();
@@ -494,7 +494,7 @@ function open_badges_recipients_form($form_state, $bid = NULL) {
       );
   } else {
     $badgeinfo = open_badges_get_badge($bid);
-    //dsm($badgeinfo, "The badge information for badge id ". $bid);
+    //dpm($badgeinfo, "The badge information for badge id ". $bid);
 
     $form['submittedbadgeid'] = array(
       '#type' => 'textfield',
@@ -530,13 +530,13 @@ function open_badges_recipients_form($form_state, $bid = NULL) {
 
     // Get a list of all current users and their badges
     $all_u = open_badges_get_users();
-    //dsm($all_u, 'The list of all the users... ???');
+    //dpm($all_u, 'The list of all the users... ???');
 
     $remove_array = array();
     $add_array = array();
 
     foreach ($all_u as $u) {
-      //dsm($u, 'Looking at user');
+      //dpm($u, 'Looking at user');
       if (isset($u['none'])) {
         // Those with no badges automatically go on the add list
         $add_array[$u['none']->uid] = $u['none']->name . '(uid ' . $u['none']->uid . ')';
@@ -558,13 +558,13 @@ function open_badges_recipients_form($form_state, $bid = NULL) {
         }
       }
     }
-    //dsm($add_array, 'The add array');
-    //dsm($remove_array, 'The remove array');
+    //dpm($add_array, 'The add array');
+    //dpm($remove_array, 'The remove array');
 
     // Get a list of all the current recipients of this badge
     $recipients = array();
     $all_r = open_badges_get_badge_recipients($bid);
-    //dsm($all_r, "All recipients returned from open_badges_get_badge_recipients");
+    //dpm($all_r, "All recipients returned from open_badges_get_badge_recipients");
     for($i = 0; $i < count($all_r); $i++) {
       $recipients[] = $all_r[$i]->name . ' (' . $all_r[$i]->type . ')';
     }
@@ -597,83 +597,97 @@ function open_badges_recipients_form($form_state, $bid = NULL) {
 }
 
 function open_badges_recipients_form_validate($form, &$form_state) {
-  // Verify dates if something other than the default
-  if (!empty($form_state['values']['issuedate']) && $form_state['values']['issuedate'] != 'yyyy-mm-dd') {
-    if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $form_state['values']['issuedate'])) {
-      form_set_error('issuedate', t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $form_state['values']['issuedate'])));
+  $values = $form_state['values'];
+
+  // Validate badge value if present
+  if (!empty($values['badgeid'])) {
+    // The field isn't empty, so we should validate it.
+    $validation = open_badges_badge_autocomplete_validation($values['badgeid']);
+    //Is it correctly formatted?
+    if ($validation[1] == 'string') {
+      form_set_error('badgeid', t('"@value" is not a valid badge name. Try using the autocomplete function (requires javascript).', array('@value' => $values['badgeid'])));
+    }
+    // The format was correct, but we need to check if the bid exists.
+    elseif ($validation[1] == 'nobid') {
+      form_set_error('badgeid', t('@value is not a valid badge ID. Try using the autocomplete function (requires javascript).', array('@value' => $validation[0])));
     }
   }
-  if (!empty($form_state['values']['expirationdate']) && $form_state['values']['expirationdate'] != 'yyyy-mm-dd') {
-    if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $form_state['values']['expirationdate'])) {
-      form_set_error('expirationdate', t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $form_state['values']['expirationdate'])));
+  // Verify dates if something other than the default
+  if (!empty($values['issuedate']) && $values['issuedate'] != 'yyyy-mm-dd') {
+    if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $values['issuedate'])) {
+      form_set_error('issuedate', t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $values['issuedate'])));
+    }
+  }
+  if (!empty($values['expirationdate']) && $values['expirationdate'] != 'yyyy-mm-dd') {
+    if (!preg_match('/\d{4}\-\d{2}-\d{2}/', $values['expirationdate'])) {
+      form_set_error('expirationdate', t('@value is not in the required \'yyyy-mm-dd\' format.', array('@value' => $values['expirationdate'])));
     }
   }
 }
 
 function open_badges_recipients_form_submit($form, &$form_state) {
-  dpm("open_badges_recipients_form_submit: entered");
+  //dpm("open_badges_recipients_form_submit: entered");
+  //dpm($form, "The form array");
+  //dpm($form_state, "The form_state array");
 
-  //dsm($form, "The form array");
-  //dsm($form_state, "The form_state array");
+  $values = $form_state['values'];
 
-  if (preg_match('/\('. t('Badge ID') .' (\d+)\)/', $form_state['values']['badgeid'], $matches)) {
+  if (preg_match('/\('. t('Badge ID') .' (\d+)\)/', $values['badgeid'], $matches)) {
     $bid = $matches[1];
     $form_state['redirect'] = 'admin/user/open_badges/recipients/' . $bid;
     return;
-  } else if (preg_match('/\('. t('Badge ID') .' (\d+)\)/', $form_state['values']['submittedbadgeid'], $matches)) {
-    dpm("We have a submission to change:" . $matches[0] . ":" . $matches[1] . ":");
+  } else if (preg_match('/\('. t('Badge ID') .' (\d+)\)/', $values['submittedbadgeid'], $matches)) {
+    //dpm("We have a submission to change:" . $matches[0] . ":" . $matches[1] . ":");
     $bid = $matches[1];
 
     $extras = array('type' => 'user');
 
-    // If these values supplied in the form, use them when adding badges
-    $issuedate = $form_state['values']['issuedate'];
+    // If these values were supplied in the form, use them when adding badges
+    $issuedate = $values['issuedate'];
     if (!empty($issuedate) && $issuedate != 'yyyy-mm-dd') {
       $extras['issuedate'] = strtotime($issuedate);
     }
 
-    $expirationdate = $form_state['values']['expirationdate'];
+    $expirationdate = $values['expirationdate'];
     if (!empty($expirationdate) && $expirationdate != 'yyyy-mm-dd') {
       $extras['expirationdate'] = strtotime($expirationdate);
     }
 
-    if (!empty($form_state['values']['evidenceurl'])) {
-      $extras['evidenceurl'] = $form_state['values']['evidenceurl'];
+    if (!empty($values['evidenceurl'])) {
+      $extras['evidenceurl'] = $values['evidenceurl'];
     }
 
-    dpm("Should be adding " . count($form_state['values']['addrecipients']) . ' new users');
+    dpm("Should be adding " . count($values['addrecipients']) . ' new users');
     // Add the badge to the selected user(s)
-    foreach ($form_state['values']['addrecipients'] as $uid) {
-      $account = user_load($uid);
+    foreach ($values['addrecipients'] as $uid) {
       $success = (boolean) open_badges_user_add_badge($uid, $bid, $extras);
       if ($success) {
-        watchdog('action', 'Added open badge %badge to user %name.', array('%badge' => $bid, '%name' => $account->name));
-        drupal_set_message(t('Successfully added open badge %badge to user %user', array('%badge' => $bid, '%user' => $account->name)));
+        watchdog('action', 'Added open badge %badge to user %uid.', array('%badge' => $bid, '%uid' => $uid));
+        drupal_set_message(t('Successfully added open badge %badge to user %uid', array('%badge' => $bid, '%uid' => $uid)));
       }
       else {
-        watchdog('action', 'Unable to add open badge %badge to user %name.', array('%badge' => $bid, '%name' => $account->name), WATCHDOG_WARNING);
-        drupal_set_message(t('Encountered an error attempting to add open badge %badge to user %user', array('%badge' => $bid, '%user' => $account->name)));
+        watchdog('action', 'Unable to add open badge %badge to user %uid.', array('%badge' => $bid, '%uid' => $uid), WATCHDOG_WARNING);
+        drupal_set_message(t('Encountered an error attempting to add open badge %badge to user %uid', array('%badge' => $bid, '%uid' => $uid)));
       }
     }
 
-    dpm("Should be removing " . count($form_state['values']['removerecipients']) . ' existing users');
+    dpm("Should be removing " . count($values['removerecipients']) . ' existing users');
     // Remove the badge from the selected user(s)
-    foreach ($form_state['values']['removerecipients'] as $uid) {
-      $account = user_load($uid);
+    foreach ($values['removerecipients'] as $uid) {
       $success = (boolean) open_badges_user_remove_badge($uid, $bid, 'user');
       if ($success) {
-        watchdog('action', 'Removed open badge %badge from user %name.', array('%badge' => $bid /*check_plain($badges[$bid]->name)*/, '%name' => check_plain($account->name)));
-        drupal_set_message(t('Successfully removed open badge %badge from user @user', array('%badge' => $bid, '@user' => $account->name)));
+        watchdog('action', 'Removed open badge %badge from user %uid.', array('%badge' => $bid, '%uid' => $uid));
+        drupal_set_message(t('Successfully removed open badge %badge from user %uid', array('%badge' => $bid, '%uid' => $uid)));
       }
       else {
-        watchdog('action', 'Unable to remove open badge %badge from user %name.', array('%badge' => $bid /*check_plain($badges[$bid]->name)*/, '%name' => check_plain($account->name)), WATCHDOG_WARNING);
-        drupal_set_message(t('Encountered an error attempting to remove open badge from user @user', array('@user' => $account->name)));
+        watchdog('action', 'Unable to remove open badge %badge from user %uid.', array('%badge' => $bid, '%uid' => $uid), WATCHDOG_WARNING);
+        drupal_set_message(t('Encountered an error attempting to remove open badge from user %uid', array('%uid' => $uid)));
       }
     }
 
     $form_state['redirect'] = 'admin/user/open_badges/recipients/' . $bid;
   } else {
-    // XXX Should have a validate function to check this?!?
+    // Should never get here, but handle it anyway
     drupal_set_message(t('Could not determine the Badge ID to be processed.'));
     $form_state['redirect'] = 'admin/user/open_badges/recipients';
     return;
@@ -777,7 +791,7 @@ function open_badges_images_form_submit($form, &$form_state) {
   // Save uploaded files.
   if ($op == t('Upload')) {
     $file = $form_state['values']['file_image'];
-    dsm($file, "open_badges_images_form_submit: The uploaded file");
+    //dpm($file, "open_badges_images_form_submit: The uploaded file");
     file_set_status($file, FILE_STATUS_PERMANENT);
   }
   elseif ($op == t('Delete')) {
@@ -907,12 +921,12 @@ function open_badges_roles_form() {
  * validation function for open_badges_roles_form
  */
 function open_badges_roles_form_validate($form, &$form_state) {
-  dsm($form_state, "roles_form_validate: form_state");
+  //dpm($form_state, "roles_form_validate: form_state");
   $array = $form_state['values']['roles'] + $form_state['values']['blocked'];
   // Go through all the entries and make sure they all have a valid badge ID.
   foreach ($array as $field => $values) {
-    dsm($field, "roles_form_validate: The field");
-    dsm($values, "roles_form_validate: The values");
+    //dpm($field, "roles_form_validate: The field");
+    //dpm($values, "roles_form_validate: The values");
     if (!empty($values['badge'])) {
       // The field isn't empty, so we should validate it.
       $validation = open_badges_badge_autocomplete_validation($values['badge']);
@@ -962,7 +976,7 @@ function open_badges_roles_form_validate($form, &$form_state) {
  */
 function open_badges_roles_form_submit($form, &$form_state) {
   $array = $form_state['values']['roles'] + $form_state['values']['blocked'];
-  dsm($array, "The array formed after combining 'roles' and 'blocked'");
+  //dpm($array, "The array formed after combining 'roles' and 'blocked'");
   foreach ($array as $field => &$values) {
     // We now have a string as our badge, so just extract the bid.
     preg_match('/\('. t('Badge ID') .' (\d+)\)/', $values['badge'], $matches);

@@ -10,7 +10,7 @@
 class views_handler_filter_open_badges_user_type extends views_handler_filter_in_operator {
   
   function get_value_options() {
-    dpm("views_handler_filter_open_badges_user_type: get_value_options(): entered");
+    //dpm("views_handler_filter_open_badges_user_type: get_value_options(): entered");
     $this->value_options = array(
       'user' => t('Open Badge'),
       'role' => t('Granted by Role')

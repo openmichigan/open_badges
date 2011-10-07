@@ -241,7 +241,7 @@ function open_badges_user($op, &$edit, &$account, $category = 'account') {
         $account->badges = $account->badges_all;
         if ($limit = variable_get('open_badges_showone', 0)) {
           //dpm("open_badges_user: limiting what will be shown");
-//  dsm("Limit: $limit, account->badges: ".print_r($account->badges, true));
+//dpm("Limit: $limit, account->badges: ".print_r($account->badges, true));
           // Loop through all potential badges and get the ones we can show.
           foreach ($account->badges_all as $bid => $badge) {
             $badge->class = 'badge ' . _open_badges_class($badge);
@@ -330,8 +330,8 @@ function open_badges_user($op, &$edit, &$account, $category = 'account') {
       break;
 
     case 'view':
-      // dpm("open_badges_user: doing 'view' probably calling theme for open_badge and open_badge_group");
-      // dsm($account, FALSE, "The account in open_badges_user");
+      //dpm("open_badges_user: doing 'view' probably calling theme for open_badge and open_badge_group");
+      //dpm($account, FALSE, "The account in open_badges_user");
       if (is_array($account->badges) && count($account->badges)) {
         $badgeimgs = array();
         foreach ($account->badges as $badge) {
@@ -367,7 +367,7 @@ function _open_badges_class($badge) {
   $class = str_replace(array('"', "'"), '', $class);
   $class = str_replace(array('_', ' '), '-', $class);
 
-  // dsm("_open_badges_class: badge->name = $badge->name becomes $class.");
+  //dpm("_open_badges_class: badge->name = $badge->name becomes $class.");
   return $class;
 }
 
@@ -413,8 +413,8 @@ function open_badges_userweight_form(&$form_state, $account) {
   $allbadges = $account->badges_all;
   $delta = 0;
   $form = array('#tree' => TRUE);
-  //dsm($allbadges, "open_badges_userweight_form: The list of all badges");
-  //dsm($form_state, "open_badges_userweight_form: The incoming form_state");
+  //dpm($allbadges, "open_badges_userweight_form: The list of all badges");
+  //dpm($form_state, "open_badges_userweight_form: The incoming form_state");
 
   // We need to know what the weight delta will be, which depends on the number
   // of badges we will list.
@@ -502,8 +502,8 @@ function open_badges_userweight_form(&$form_state, $account) {
 
   $form['submit'] = array('#type' => 'submit', '#value' => t('Submit'));
 
-  //dsm($form, "open_badges_userweight_form: the final form");
-  //dsm($form_state, "open_badges_userweight_form: the final form_state");
+  //dpm($form, "open_badges_userweight_form: the final form");
+  //dpm($form_state, "open_badges_userweight_form: the final form_state");
   return $form;
 }
 
@@ -513,8 +513,8 @@ function open_badges_userweight_form(&$form_state, $account) {
  * Update the badge userweights
  */
 function open_badges_userweight_form_submit($form, &$form_state) {
-  //dsm($form, "open_badges_userweight_form_submit: The submitted form!");
-  //dsm($form_state, "open_badges_userweight_form_submit: The submitted form_state!");
+  //dpm($form, "open_badges_userweight_form_submit: The submitted form!");
+  //dpm($form_state, "open_badges_userweight_form_submit: The submitted form_state!");
   if (isset($form['weight']) && is_array($form['weight'])) {
     foreach (element_children($form['weight']) as $bid) {
       db_query("UPDATE {open_badges_user} SET userweight = %d WHERE bid = %d AND uid = %d",
@@ -542,7 +542,7 @@ function open_badges_userweight_form_submit($form, &$form_state) {
   if (isset($form['badgeallowsharing']) && is_array($form['badgeallowsharing'])) {
     foreach (element_children($form['badgeallowsharing']) as $bid) {
       $badgeallowsharing = $form_state['values']['badgeallowsharing'][$bid];
-      dpm("open_badges_userweight_form_submit: For badge {$bid}, badgeallowsharing is '{$badgeallowsharing}' initial value was: " . $form_state['open_badges']['initial_values'][$bid]['badgeallowsharing']);
+      //dpm("open_badges_userweight_form_submit: For badge {$bid}, badgeallowsharing is '{$badgeallowsharing}' initial value was: " . $form_state['open_badges']['initial_values'][$bid]['badgeallowsharing']);
       if ($badgeallowsharing != $form_state['open_badges']['initial_values'][$bid]['badgeallowsharing']) {
         if ($badgeallowsharing == OPEN_BADGES_USER_DECISION_NO || $badgeallowsharing == OPEN_BADGES_USER_DECISION_YES) {
           //dpm("open_badges_userweight_form_submit: updating badgeallowsharing to {$badgeallowsharing} for badge {$bid}, uid {$form_state['values']['uid']}");
@@ -567,8 +567,8 @@ function open_badges_userweight_form_submit($form, &$form_state) {
  */
 function theme_open_badges_date($value, $attributes) {
   //dpm("theme_open_badges_date: entered");
-  //dsm($value, "theme_open_badges_date: value");
-  //dsm($attributes, "theme_open_badges_date: attribute information");
+  //dpm($value, "theme_open_badges_date: value");
+  //dpm($attributes, "theme_open_badges_date: attribute information");
   return $attributes['prefix'] . ($value == 0 ? t('N/A') : format_date($value, 'custom', 'm/d/Y', 0));
 }
 
@@ -577,8 +577,8 @@ function theme_open_badges_date($value, $attributes) {
  */
 function theme_open_badges_link($value, $attributes) {
   //dpm("theme_open_badges_link: entered");
-  //dsm($value, "theme_open_badges_link: value");
-  //dsm($attributes, "theme_open_badges_link: attribute information");
+  //dpm($value, "theme_open_badges_link: value");
+  //dpm($attributes, "theme_open_badges_link: attribute information");
   if ($value != '') {
     return l($attributes['text'], $value, array());
   } else {
@@ -591,8 +591,8 @@ function theme_open_badges_link($value, $attributes) {
  */
 function theme_open_badges_allowsharing($value, $attributes) {
   //dpm("theme_open_badges_allowsharing: entered");
-  //dsm($value, "theme_open_badges_allowsharing: form information");
-  //dsm($attributes, "theme_open_badges_allowsharing: attribute information");
+  //dpm($value, "theme_open_badges_allowsharing: form information");
+  //dpm($attributes, "theme_open_badges_allowsharing: attribute information");
   switch($value) {
     case OPEN_BADGES_USER_DECISION_YES:
       return t('This badge should be displayed/shared');
@@ -759,7 +759,7 @@ function open_badges_userweight_page($uid) {
     $open_badges = open_badges_get_badges($account->uid, array('nolimit' => TRUE));
     $badges = array();
     foreach ((array)$open_badges as $badge) {
-      // dsm($badge, "The badge in open_badges_userweight_page");
+      //dpm($badge, "The badge in open_badges_userweight_page");
       $badges[] = theme('open_badge', $badge, $account);
     }
     if ($badges) {
@@ -801,8 +801,6 @@ function theme_open_badges_change_form_theme($form) {
 
 function open_badges_change_form(&$form_state, $account) {
   $form = array();
-  $dateformat = 'Y-m-d';
-  $datedefault = '0000-00-00';
 
   $form['uid'] = array(
     '#type' => 'value',
@@ -1029,10 +1027,18 @@ function _generate_assertionurl($uid, $bid, $type) {
  * @return bool with query success
  */
 function open_badges_user_add_badge($uid, $bid, $extras) {
+  dpm($extras, "open_badges_user_add_badge: The extras");
   $type = $extras['type'];
   if (isset($extras['issuedate'])) $issuedate = $extras['issuedate']; else $issuedate = time();
   if (isset($extras['expirationdate'])) $expirationdate = $extras['expirationdate']; else $expirationdate = 0;
   if (isset($extras['evidenceurl'])) $evidenceurl = $extras['evidenceurl']; else $evidenceurl = NULL;
+  // XXX TESTING XXX
+  //if (isset($extras['sharewithobi'])) $sharewithobi = $extras['sharewithobi']; else $sharewithobi = TRUE; //XXX TESTING: Default should be FALSE
+  if ($uid == 18) {
+    $sharewithobi = TRUE;
+  } else {
+    $sharewithobi = FALSE;
+  }
 
   $existingbadge = open_badges_get_user_badge($uid, $bid, $type);
   if ($existingbadge != NULL) {
@@ -1050,7 +1056,7 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
     return $dbresult;
   }
   // XXX Always re-bake, or can we re-use an existing one in some (or all) cases?
-  return open_badges_bake_badge($uid, $bid, $assertionurl, FALSE /* XXX Need to have this passed in!*/);
+  return open_badges_bake_badge($uid, $bid, $assertionurl, $sharewithobi);
   // XXX Delete DB entry in the error case!!!!
   // XXX Delete DB entry in the error case!!!!
   // XXX Delete DB entry in the error case!!!!
@@ -1093,9 +1099,9 @@ function open_badges_get_badges($uid, $options = array()) {
   static $badges = array(), $past_uid, $past_options;
   global $user;
 
-  dpm("open_badges_get_badges: uid: '{$uid}', past_uid: '{$past_uid}', current user's id: {$user->uid}");
+  //dpm("open_badges_get_badges: uid: '{$uid}', past_uid: '{$past_uid}', current user's id: {$user->uid}");
   if (isset($badges[$uid])) {
-    // dsm($badges[$uid], "open_badges_get_badges: CACHED badges[uid] for uid $uid");
+    //dpm($badges[$uid], "open_badges_get_badges: CACHED badges[uid] for uid $uid");
     return $badges[$uid];
   }
 
@@ -1105,7 +1111,7 @@ function open_badges_get_badges($uid, $options = array()) {
   if (empty($past_uid) || $past_uid !== $uid || $past_options !== $options ) {
     $past_uid = $uid;
     if ($uid == 'all' || $uid == 'select') {
-      dpm("open_badges_get_badges: getting '{$uid}' badges");
+      //dpm("open_badges_get_badges: getting '{$uid}' badges");
       $sql = db_query('SELECT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
         b.unhideable, b.fixedweight, b.doesnotcounttolimit, b.tid,
         FROM {open_badges_badges} b
@@ -1115,7 +1121,7 @@ function open_badges_get_badges($uid, $options = array()) {
       $usr = db_result(db_query('SELECT COUNT(uid) FROM {users} WHERE uid = %d AND status = 0', $uid));
 
       if ($usr && variable_get('open_badges_showblocked', 0)) {
-        dpm("open_badges_get_badges: getting blocked users badges");
+        //dpm("open_badges_get_badges: getting blocked users badges");
         $sql = db_query('SELECT DISTINCT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
           b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidenceurl,
           CASE WHEN b.fixedweight = 1 THEN b.weight ELSE COALESCE(u.userweight,b.weight) END coalescedweight
@@ -1127,7 +1133,7 @@ function open_badges_get_badges($uid, $options = array()) {
           $uid);
       }
       else {
-        dpm("open_badges_get_badges: getting normal badge list for uid {$uid}");
+        //dpm("open_badges_get_badges: getting normal badge list for uid {$uid}");
         $query = 'SELECT DISTINCT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
           b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidenceurl,
           CASE WHEN b.fixedweight = 1 THEN b.weight ELSE COALESCE(u.userweight,b.weight) END coalescedweight
@@ -1152,7 +1158,7 @@ function open_badges_get_badges($uid, $options = array()) {
 
 
     $checkallowsharing =  user_access('manage badges') == FALSE && ($uid != 'all' && $uid != 'select' && $uid != $user->uid);
-    dpm("open_badges_get_badges: checkallowsharing is " . ($checkallowsharing ? "TRUE" : "FALSE"));
+    //dpm("open_badges_get_badges: checkallowsharing is " . ($checkallowsharing ? "TRUE" : "FALSE"));
     while ($badge = db_fetch_object($sql)) {
       // Display the badge if there's no limit or if the badge is unhideable or if we are within our limit.
       if ($checkallowsharing && $badge->badgeallowsharing != OPEN_BADGES_USER_DECISION_YES)
@@ -1174,7 +1180,7 @@ function open_badges_get_badges($uid, $options = array()) {
     }
   }
 
-  // dsm($badges[$uid], "open_badges_get_badges: badges[uid] for uid $uid");
+  //dpm($badges[$uid], "open_badges_get_badges: badges[uid] for uid $uid");
   return $badges[$uid];
 }
 
@@ -1189,7 +1195,7 @@ function open_badges_get_badges($uid, $options = array()) {
 function open_badges_get_badge_recipients($bid) {
   static $recipients = array();
 
-  dpm("open_badges_get_badge_recipients: entered");
+  //dpm("open_badges_get_badge_recipients: entered");
   // Return cached value if we get called multiple times for some reason
   if (isset($recipients[$bid])) {
     return $recipients[$bid];
@@ -1202,7 +1208,7 @@ function open_badges_get_badge_recipients($bid) {
   while ($r = db_fetch_object($sql)) {
     $recipients[$bid][] = $r;
   }
-  dsm($recipients[$bid], "open_badges_get_badge_recipients: returning");
+  //dpm($recipients[$bid], "open_badges_get_badge_recipients: returning");
   return $recipients[$bid];
 }
 
@@ -1296,7 +1302,7 @@ function open_badges_get_users() {
                    ON obu.uid = u.uid
                    ORDER BY u.uid ASC');
   while ($row = db_fetch_object($sql)) {
-    //dsm($row, 'get_users: A raw row from the db_query');
+    //dpm($row, 'get_users: A raw row from the db_query');
     if (isset($row->bid)) {
       //dpm("uid '{$row->uid}' name '{$row->name}' bid '{$row->bid}' type '{$row->type}'");
       $usrs[$row->uid][$row->type][$row->bid] = $row;
@@ -1315,7 +1321,7 @@ function open_badges_get_users() {
  *   An array in the format rid => badge_info for each role/badge relationship.
  */
 function open_badges_save_roles($roles) {
-  dsm($roles, "save_roles: the input roles array");
+  //dpm($roles, "save_roles: the input roles array");
   if (is_array($roles)) {
     // We have to clear out all badges first.
     // XXX YIKES! We need to preserve assertionurl values first,
@@ -1332,11 +1338,11 @@ function open_badges_save_roles($roles) {
     // Now we loop through the roles and their badges, and assign them to
     // each user accordingly.
     foreach ($roles as $rid => $info) {
-      dsm($rid, "save_roles: role id");
-      dsm($info, "save_roles: info");
+      //dpm($rid, "save_roles: role id");
+      //dpm($info, "save_roles: info");
 
       if ($info['badge']) {
-        dpm("***** Processing entry for role id {$rid}, badge ID {$info['badge']} *****.");
+        //dpm("***** Processing entry for role id {$rid}, badge ID {$info['badge']} *****.");
         // First of all, insert all the role and badge relationship
         // into open_badges_roles.
         $success = $success && db_query('INSERT INTO {open_badges_roles} (rid, bid) VALUES (%d, %d)', $rid, $info['badge']);
@@ -1367,7 +1373,7 @@ function open_badges_save_roles($roles) {
         // The blocked user "role" (represented as rid 0) has no entry in
         // the users_role table, so it needs its own special query.
         if ($rid == 0) {
-          dpm("Doing an insert for blocked user");
+          //dpm("Doing an insert for blocked user");
           $success = $success && db_query("
             INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, assertionurl, evidenceurl)
             SELECT u.uid, %d, 'role', %d, %d, '%s', '%s'
@@ -1380,7 +1386,7 @@ function open_badges_save_roles($roles) {
         // The authenticated user role (represented as rid 2) has no entry
         // in the users_role table, so it needs its own special query.
         elseif ($rid == 2) {
-          dpm("Doing an insert for authenticated user");
+          //dpm("Doing an insert for authenticated user");
           $success = $success && db_query("
             INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, assertionurl, evidenceurl)
             SELECT u.uid, %d, 'role', %d, %d, '%s', '%s'
@@ -1392,7 +1398,7 @@ function open_badges_save_roles($roles) {
         }
         // For all the normal roles, we want to run this query.
         else {
-          dpm("Doing an insert for specific user");
+          //dpm("Doing an insert for specific user");
           $success = $success && db_query("
             INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, assertionurl, evidenceurl)
             SELECT ur.uid, %d, 'role', %d, %d, '%s', '%s'
@@ -1478,7 +1484,7 @@ function open_badges_for_user($load, $list = FALSE) {
  * $badgeimages is an array of badge image tags from theme_open_badge()
  */
 function theme_open_badge_group($badgeimages) {
-  //dsm($badgeimages, "theme_open_badge_group: the badgeimages");
+  //dpm($badgeimages, "theme_open_badge_group: the badgeimages");
   if (!empty($badgeimages)) {
     return '<div class="open_badges">'. implode('', $badgeimages) .'</div>';
   }
@@ -1503,7 +1509,7 @@ function _open_badges_build_image($badge) {
     //dpm("_open_badges_build_image: calling theme 'image' for image '{$badge->image}'");
     $image = theme('image', $badge->image, $badge->name, $badge->name, array('class' => $badge->class), !$get_size);
   }
-  // dpm("_open_badges_build_image: returning '{$image}'");
+  //dpm("_open_badges_build_image: returning '{$image}'");
   return $image;
 }
 
@@ -1849,7 +1855,7 @@ function _save_baked_badge($assertionpath, $badgeblob) {
   }
   //dpm("_save_baked_badge: The final path for baked badge is '{$path}'");
   $filename = file_save_data($badgeblob, $path, FILE_EXISTS_REPLACE);
-  //dsm($filename, "_save_baked_badge: The file returned from file_save_data");
+  //dpm($filename, "_save_baked_badge: The file returned from file_save_data");
   // Note that the documentation says that file_save_data() returns the filename
   // or 0 on error.  Checking $filename == 0 causes this function to return FALSE
   // even though the file was saved?
@@ -1860,7 +1866,7 @@ function _update_badge_state_and_bakedimage($uid, $bid, $newstate, $bakedimage) 
   $result =  db_query('UPDATE {open_badges_user} SET state = %d, bakedimage = \'%s\' WHERE uid = %d AND bid = %d',
                       $newstate, $bakedimage, $uid, $bid);
   //dpm("The db state and bakedimage update returned '{$result}'");
-  dsm($result, "The result of _update_badges_state_and_bakedimage");
+  //dpm($result, "The result of _update_badges_state_and_bakedimage");
   return ($result === FALSE ? FALSE : TRUE);
 }
 
@@ -1875,10 +1881,9 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
 
   // Construct the query string
   $queryarray['assertion'] = $ourorigin . '/open_badges/assertion/' . $assertionpath;
-  // XXX For now, leave this off, since the default is NOT to share!
-  // XXX $query['award'] = $sendtobackpack ? "true" : "false";
+  $queryarray['award'] = $sendtobackpack ? "true" : "false";
   $querystring = http_build_query($queryarray, '', '&');
-  // Add the query string to the url, it is not 'data'!
+  // Add the query string to the url -- it is not 'data'!
   $bakerserviceurl = variable_get('open_badges_badgebakingurl', '');
   $bakerserviceurl .= '?' . $querystring;
 
@@ -1886,7 +1891,7 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
 
   $bakeresult = drupal_http_request($bakerserviceurl, $headers, 'GET', NULL);
 
-  dsm($bakeresult, "open_badges_bake_badge: The result from the get request for baking");
+  dpm($bakeresult, "open_badges_bake_badge: The result from the baking request");
 
   if ($bakeresult->code > 200) {
     drupal_set_message("Error {$bakeresult->code}, baking badge {$bid} for uid {$uid}", 'error');
@@ -1897,9 +1902,9 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
   }
 
   $bakedimage = _save_baked_badge($assertionpath, $bakeresult->data);
-  dsm($bakedimage, "open_badges_bake_badge: The filename returned from _save_baked_badge");
+  //dpm($bakedimage, "open_badges_bake_badge: The filename returned from _save_baked_badge");
   if ($bakedimage === FALSE) {
-    drupal_set_message("Error saving baked badge to path {$assertionpath} for uid {$uid} and badge {$bid}.", 'error');
+    drupal_set_message("Error saving baked badge to path {$assertionpath} for uid {$uid} and badge {$bid}", 'error');
     watchdog('error', "Error saving baked badge to path @path for uid @uid and badge @bid.",
              array('@uid' => $uid, '@bid' => $bid, '@path' => $assertionpath), WATCHDOG_WARNING);
     return FALSE;
@@ -1908,9 +1913,10 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
   // Check for header indicating whether it was successfully sent to the backpack (if requested)
   $newstate = OPEN_BADGES_STATE_BAKED;
   if ($sendtobackpack === TRUE) {
-    if (isset($bakeresult['headers']['x-badge-awarded']) && $bakeresult['headers']['x-badge-awarded'] == 'true') {
-      $newstate = OPEN_BADGES_STATE_BAKED_AND_SHARED;
-    }
+    dpm("Would be checking for x-badge-awarded header value");
+    //if (isset($bakeresult['headers']['x-badge-awarded']) && $bakeresult['headers']['x-badge-awarded'] != 'false') {
+    //  $newstate = OPEN_BADGES_STATE_BAKED_AND_SHARED;
+    //}
   }
   return _update_badge_state_and_bakedimage($uid, $bid, $newstate, $bakedimage);
 }
@@ -1952,7 +1958,7 @@ function open_badges_notify_new_recipients() {
   $key = '';
 
   while (($badge = db_fetch_object($result)) != NULL) {
-    dsm($badge, "A baked badge whose recipient needs to be notified");
+    //dpm($badge, "A baked badge whose recipient needs to be notified");
 
     if ($first_entry || $current_uid != $badge->uid) {
       if ($first_entry) {
@@ -1962,7 +1968,7 @@ function open_badges_notify_new_recipients() {
         $message = _open_badges_send_mimemail($key, $params);
         //XXX Update entry to indicate they've been notified (if the email works)
       }
-      dpm("Initializing for a new user: {$badge->uid}");
+      //dpm("Initializing for a new user: {$badge->uid}");
       $params = array();
       $params['badgecount'] = 0;
       $params['attachments'] = array();
@@ -1972,7 +1978,7 @@ function open_badges_notify_new_recipients() {
       // This should be the same for all badges for the same user?
       $key = $badge->state == OPEN_BADGES_STATE_BAKED ? 'notshared' : 'shared';
     }
-    dpm("Adding a baked image {$badge->bakedimage} for uid {$current_uid}");
+    //dpm("Adding a baked image {$badge->bakedimage} for uid {$current_uid}");
     $attachment = array();
     $attachment['filepath'] = '/' . $badge->bakedimage;
     $attachment['filecontent'] = NULL;
@@ -1990,8 +1996,8 @@ function open_badges_notify_new_recipients() {
  * Use mimemail to send notification email
  */
 function _open_badges_send_mimemail($key, $params) {
-  dpm("_open_badges_send_mimemail: entered!");
-  dsm($params, "_open_badges_send_mimemail: params");
+  //dpm("_open_badges_send_mimemail: entered!");
+  //dpm($params, "_open_badges_send_mimemail: params");
   $sender = variable_get('open_badges_fromaddress', NULL);
   $recipient = $params['account'];
   $subject = variable_get('open_badges_subject', t('You have earned a new badge!'));
@@ -2006,19 +2012,18 @@ function _open_badges_send_mimemail($key, $params) {
   }
   $attachments = $params['attachments'];
 
-  dsm($params, "The params used to populate parameters for mimemail");
-  dsm($sender, "The sender of the email");
-  dsm($recipient, "The recipient of the email");
+  //dpm($params, "The params used to populate parameters for mimemail");
+  //dpm($sender, "The sender of the email");
+  //dpm($recipient, "The recipient of the email");
   // XXX Temporary while debugging...
   if ($recipient->uid != 18) {
-    dpm("_open_badges_send_mimemail: NOT SENDING email for user {$recipient->name}, {$recipient->uid}");
-    drupal_set_message("NOT SENDING email for user {$recipient->name}, {$recipient->uid}", 'error');
+    drupal_set_message("NOT SENDING email to user @name, @uid", array(@name => $recipient->name, @uid => $recipient->uid), 'error');
     return FALSE;
   }
-  dpm("_open_badges_send_mimemail: SENDING email for user {$recipient->name}, {$recipient->uid}");
+  drupal_set_message("SENDING email to user @name, @uid", array(@name => $recipient->name, @uid => $recipient->uid), 'error');
 
   $sentmsg = mimemail($sender, $recipient, $subject, $body, NULL, $headers, NULL, $attachments);
-  dsm($sentmsg, "The email sent");
+  //dpm($sentmsg, "The email sent");
   return $sentmsg;
 }
 
@@ -2026,7 +2031,7 @@ function _open_badges_send_mimemail($key, $params) {
  * Send the notification email
  */
 function open_badges_notify_mail($key, &$message, $params) {
-  dpm("open_badges_notify_mail: entered!");
+  //dpm("open_badges_notify_mail: entered!");
   $message['subject'] = variable_get('open_badges_subject', t('You have earned a new badge!'));
   switch ($key) {
     case 'shared':
@@ -2057,7 +2062,7 @@ function open_badges_process_assertion_request($fullurl) {
                       LEFT JOIN {open_badges_badges} obb ON obu.bid = obb.bid
                       WHERE obu.assertionurl LIKE \'%s\'', $assertionurl);
   //dpm("The result of the query is " . ($result == NULL ? "NULL" : $result));
-  //dsm($result, "The result of the database query for the assertion url {$url}");
+  //dpm($result, "The result of the database query for the assertion url {$url}");
   // If we don't have the requested assertion URL, politely tell them to go away
   $count = 0;
   $info = NULL;
@@ -2071,7 +2076,7 @@ function open_badges_process_assertion_request($fullurl) {
   if ($count > 1) {
     return t('System error: multiple matching assertion URLs');
   }
-  //dsm($info, "The returned information");
+  //dpm($info, "The returned information");
   //dpm("You have supplied assertion url '{$url}' and count is {$count}");
 
   // Compile the assertion

@@ -13,7 +13,7 @@
  * Implements hook_views_handlers().
  */
 function open_badges_views_handlers() {
-  dpm("open_badges_views_handlers: entered");
+  //dpm("open_badges_views_handlers: entered");
   return array(
     'handlers' => array(
       'views_handler_field_open_badges_badges_badge' => array(
@@ -33,7 +33,7 @@ function open_badges_views_handlers() {
  * Implements hook_views_data().
  */
 function open_badges_views_data() {
-  dpm("open_badges_views_data: entered");
+  //dpm("open_badges_views_data: entered");
   // Describe the open_badges_user table.
 
   // Define the base group of this table. Fields that don't
