@@ -1876,7 +1876,7 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
   $ourorigin = variable_get('open_badges_defaultissuerorigin', '');
 
   // Assemble parts of the query string
-  $query['assertionurl'] = $ourorigin . '/open_badges/assertion/' . $assertionpath;
+  $query['assertion'] = $ourorigin . '/open_badges/assertion/' . $assertionpath;
   // XXX For now, leave this off, since the default is NOT to share!
   // XXX $query['award'] = $sendtobackpack ? "true" : "false";
   $data = http_build_query($query, '', '&');
