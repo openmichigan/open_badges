@@ -426,10 +426,12 @@ function open_badges_userweight_form(&$form_state, $account) {
 
   $permissions = open_badges_get_user_permissions($account->uid);
   $userallowsharing = $permissions === FALSE ? FALSE : $permissions->userallowsharing;
+  $useremails = $permissions === FALSE ? OPEN_BADGES_USER_DECISION_YES : $permissions->useremails;
   //dpm("open_badges_userweight_form: The userallowsharing value returned from open_badges_get_user_permissions: " . ($userallowsharing === FALSE ? "FALSE" : $userallowsharing));
 
   // Pass the initial value through to the validation and submission functions
   $form_state['open_badges']['initial_values']['userallowsharing'] = $userallowsharing;
+  $form_state['open_badges']['initial_values']['useremails'] = $useremails;
   // Only show 'No Decision' as an option until a decision has been made
   if ($userallowsharing === FALSE) {
     drupal_set_message(t('Note: You have not yet decided whether to share badges with Mozilla\'s OBI (Open Badge Infrastructure)'), 'warning', FALSE);
@@ -445,6 +447,15 @@ function open_badges_userweight_form(&$form_state, $account) {
                         OPEN_BADGES_USER_DECISION_NO => t('No'),
                         OPEN_BADGES_USER_DECISION_YES => t('Yes')) :
                   array(OPEN_BADGES_USER_DECISION_NO => t('No'),
+                        OPEN_BADGES_USER_DECISION_YES => t('Yes')) ,
+  );
+
+  $form['useremails'] = array(
+    '#type' => 'select',
+    '#title' => t('Receive emails when new badges are earned?'),
+    //'#required' => TRUE,
+    '#default_value' => $useremails,
+    '#options' => array(OPEN_BADGES_USER_DECISION_NO => t('No'),
                         OPEN_BADGES_USER_DECISION_YES => t('Yes')) ,
   );
 
@@ -538,6 +549,12 @@ function open_badges_userweight_form_submit($form, &$form_state) {
       drupal_set_message(t('Your badges will @yesno be shared with Mozilla OBI',
                array('@yesno' => $form_state['values']['userallowsharing'] == OPEN_BADGES_USER_DECISION_NO ? t('NOT') : t('now'))));
     }
+  }
+  if (isset($form_state['values']['useremails']) && $form_state['values']['useremails'] != $form_state['open_badges']['initial_values']['useremails']) {
+    db_query("UPDATE {open_badges_permissions} SET useremails = %d WHERE uid = %d",
+             $form_state['values']['useremails'], $form_state['values']['uid']);
+    drupal_set_message(t('You will @yesno receive emails when you earn new badges',
+             array('@yesno' => $form_state['values']['useremails'] == OPEN_BADGES_USER_DECISION_NO ? t('no longer') : t('now'))));
   }
   if (isset($form['badgeallowsharing']) && is_array($form['badgeallowsharing'])) {
     foreach (element_children($form['badgeallowsharing']) as $bid) {
@@ -661,8 +678,9 @@ function theme_open_badges_userweight_form($form) {
   // This makes the table draggable
   drupal_add_tabledrag('open_badges_userweight', 'order', 'sibling', 'open_badges_userweight_element');
 
-  // Place the general choice before the table of issued badges
+  // Place the general choices before the table of issued badges
   $output .= drupal_render($form['userallowsharing']);
+  $output .= drupal_render($form['useremails']);
 
   // Theme the rows we have processed so far into a table
   $output .= theme('table', $form['header']['#value'], $rows, array('id' => 'open_badges_userweight'));
@@ -1027,7 +1045,7 @@ function _generate_assertionurl($uid, $bid, $type) {
  * @return bool with query success
  */
 function open_badges_user_add_badge($uid, $bid, $extras) {
-  dpm($extras, "open_badges_user_add_badge: The extras");
+  //dpm($extras, "open_badges_user_add_badge: The extras");
   $type = $extras['type'];
   if (isset($extras['issuedate'])) $issuedate = $extras['issuedate']; else $issuedate = time();
   if (isset($extras['expirationdate'])) $expirationdate = $extras['expirationdate']; else $expirationdate = 0;
@@ -1233,7 +1251,7 @@ function open_badges_get_user_badge($uid, $bid, $type) {
  */
 function open_badges_get_user_permissions($uid) {
   //dpm("open_badges_get_user_permissions: entered with uid {$uid}");
-  return db_fetch_object(db_query('SELECT userallowsharing FROM {open_badges_permissions} WHERE uid = %d', $uid));
+  return db_fetch_object(db_query('SELECT * FROM {open_badges_permissions} WHERE uid = %d', $uid));
 }
 
 function open_badges_delete_form($form_state, $bid) {
@@ -1891,7 +1909,7 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
 
   $bakeresult = drupal_http_request($bakerserviceurl, $headers, 'GET', NULL);
 
-  dpm($bakeresult, "open_badges_bake_badge: The result from the baking request");
+  //dpm($bakeresult, "open_badges_bake_badge: The result from the baking request");
 
   if ($bakeresult->code > 200) {
     drupal_set_message("Error {$bakeresult->code}, baking badge {$bid} for uid {$uid}", 'error');
@@ -1902,7 +1920,7 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
   }
 
   $bakedimage = _save_baked_badge($assertionpath, $bakeresult->data);
-  //dpm($bakedimage, "open_badges_bake_badge: The filename returned from _save_baked_badge");
+  dpm($bakedimage, "open_badges_bake_badge: The filename returned from _save_baked_badge");
   if ($bakedimage === FALSE) {
     drupal_set_message("Error saving baked badge to path {$assertionpath} for uid {$uid} and badge {$bid}", 'error');
     watchdog('error', "Error saving baked badge to path @path for uid @uid and badge @bid.",
@@ -1938,16 +1956,27 @@ function open_badges_bake_badges() {
  *
  * We get a list of 'baked' badges where the user has not yet been notified.
  * The result list should be ordered by UID.  We loop through and collect all
- * the badges for a user and batch them up into a single email message
+ * the badges for a user and batch them up into a single email message.
  *
  * XXX Need to mark each entry as 'notified' after the email is successfully sent!
- */
-function open_badges_notify_new_recipients() {
+ *
+ * mysql>
+  SELECT * FROM open_badges_user obu
+         LEFT JOIN users u ON obu.uid = u.uid
+         LEFT JOIN open_badges_badges obb ON obu.bid = obb.bid
+         LEFT JOIN open_badges_permissions obp ON obu.uid = obp.uid AND obp.useremails = 2
+         WHERE obu.usernotified = 0 AND (obu.state = 2 OR obu.state = 3)
+         ORDER BY obu.uid;
+ *
+function open_badges_notify_new_recipients_bulk() {
   $result = db_query('SELECT * FROM {open_badges_user} obu
                       LEFT JOIN {users} u ON obu.uid = u.uid
+                      LEFT JOIN {open_badges_badges} obb ON obu.bid = obb.bid
+                      LEFT JOIN {open_badges_permissions} obp ON obu.uid = obp.uid AND obp.useremails = %d
                       WHERE obu.usernotified = %d AND (obu.state = %d OR obu.state =  %d)
                       ORDER BY obu.uid',
-                      0, OPEN_BADGES_STATE_BAKED, OPEN_BADGES_STATE_BAKED_AND_SHARED);
+                      USER_BADGES_USER_DECISION_YES, 0, OPEN_BADGES_STATE_BAKED, OPEN_BADGES_STATE_BAKED_AND_SHARED);
+  dsm($result, "open_badges_notify_new_recipients: The result of the query");
 
   $from = variable_get('open_badges_fromaddress', NULL);
 
@@ -1991,16 +2020,134 @@ function open_badges_notify_new_recipients() {
   $message = _open_badges_send_mimemail($key, $params);
   //XXX Update entry to indicate they've been notified (if the email works)
 }
+ */
+
+/**
+ * Notify users of their shiny new badges!
+ *
+ * We get a list of 'baked' badges where the user has not yet been notified.
+ * The result list should be ordered by UID.  This version sends a seperate
+ * email for each badge earned.
+ *
+ */
+function open_badges_notify_new_recipients() {
+  //dpm("open_badges_notify_new_recipients: entered");
+
+  $from = variable_get('open_badges_fromaddress', NULL);
+
+  $sql = "SELECT obu.uid, obu.bid, obu.bakedimage, obu.state,
+                 obb.name, obb.criteria, obb.description, obp.useremails
+          FROM {open_badges_user} obu
+          LEFT JOIN {open_badges_badges} obb ON obu.bid = obb.bid
+          LEFT JOIN {open_badges_permissions} obp ON obu.uid = obp.uid
+          WHERE obu.usernotified = %d AND (obu.state = %d OR obu.state =  %d)
+          ORDER BY obu.uid";
+
+  $result = db_query(db_rewrite_sql($sql),
+                     0, OPEN_BADGES_STATE_BAKED, OPEN_BADGES_STATE_BAKED_AND_SHARED);
+  if ($result === FALSE) {
+    drupal_set_message("open_badges_notify_new_recipients: Error getting list of recipients", 'error');
+    return;
+  }
+  //dpm("open_badges_notify_new_recipients: There were " . db_affected_rows() . " results from the SELECT query");
+
+  while ($row = db_fetch_object($result)) {
+
+    // useremails will be NULL if the user has no preferences entry yet
+    if ($row->useremails == OPEN_BADGES_USER_DECISION_NO) {
+      //dpm("SKIPPING ENTRY for user " . $row->uid . ", because they don't want email");
+      continue;
+    }
+    //dpm($row, "open_badges_notify_new_recipients: notifying user about this badge");
+
+    $params = array();
+    $params['attachments'] = array();
+    $account = user_load($row->uid);
+    $params['account'] = $account;
+    $key = $row->state == OPEN_BADGES_STATE_BAKED ? 'notshared' : 'shared';
+
+    $attachment = array();
+    $attachment['filepath'] = '/' . $row->bakedimage;
+    $attachment['filecontent'] = NULL;
+    $attachment['filename'] = $row->name . '.png';
+    $attachment['filemime'] = 'image/png';
+    $params['attachments'][] = $attachment;
+    $params['info'] = $row;
+
+    $message = _open_badges_send_mimemail($key, $params);
+
+    //$updateresult = db_query('UPDATE {open_badges_user} SET usernotified = %d WHERE uid = %d and bid = %d', 1, $row->uid, $row->bid);
+    //dpm($updateresult, "open_badges_notify_new_recipients: The result of the UPDATE query");
+  }
+  //dpm("open_badges_notify_new_recipients: exiting");
+}
+
+/**
+ *
+ * Do Markdown-style link, "[<link text>] (<url>)", substitutions.
+ *
+ */
+function _do_markdown_link_substitutions($original) {
+  $subbed = preg_replace_callback(
+    "/\[(.+?)\][ ]?\((.+?)\)/",
+    create_function(
+        '$matches',
+        'return l($matches[1], $matches[2]);'
+    ),
+    $original
+  );
+  return $subbed;
+}
+
+/**
+ *
+ * Do substitutions in the given string with the values in the given array
+ *
+ */
+function _do_text_substitutions($original, $subs) {
+  //dpm("_do_text_substitutions: original '{$original}'");
+  //dpm($subs, "_do_text_substitutions: The subs array");
+  $subbed = $original;
+  foreach($subs as $key => $value) {
+    $subbed = str_replace($key, $value, $subbed);
+  }
+
+  // Now check for Markdown-style URL substitutions and make them
+  $subbed = _do_markdown_link_substitutions($subbed);
+
+  //dpm("_do_text_substitution: returning '{$subbed}'");
+  return $subbed;
+}
+
+/**
+ *
+ * Prepare the pre-set substitution list for email templates
+ * @param array $info Array of substitution information obtained from the database
+ * @return array of key value pairs
+ */
+function _prepare_substitutions($info) {
+  $ret = array();
+  $ret['{Badge Title}'] = $info->name;
+  $ret['{Badge Description}'] = $info->description;
+  $ret['{Badge Criteria URL}'] = $info->criteria;
+  $ret['{Badge Recipients URL}'] = 'open_badges/' . $info->bid;
+  $ret['{Badge User URL}'] = 'user/' . $info->uid . '/open_badges';
+  $ret['{Mozilla Backpack URL}'] = 'http://beta.openbadges.org/'; // XXX
+  //dpm($ret, "_prepare_substitutions: the returned values");
+  return $ret;
+}
 
 /**
  * Use mimemail to send notification email
  */
 function _open_badges_send_mimemail($key, $params) {
+  $subs = _prepare_substitutions($params['info']);
   //dpm("_open_badges_send_mimemail: entered!");
   //dpm($params, "_open_badges_send_mimemail: params");
   $sender = variable_get('open_badges_fromaddress', NULL);
   $recipient = $params['account'];
   $subject = variable_get('open_badges_subject', t('You have earned a new badge!'));
+  $subject = _do_text_substitutions($subject, $subs);
   $headers = array();
   switch ($key) {
     case 'shared':
@@ -2010,6 +2157,7 @@ function _open_badges_send_mimemail($key, $params) {
       $body = variable_get('open_badges_bodynotshared', '');
       break;
   }
+  $body = _do_text_substitutions($body, $subs);
   $attachments = $params['attachments'];
 
   //dpm($params, "The params used to populate parameters for mimemail");

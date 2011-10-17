@@ -626,9 +626,15 @@ function open_badges_recipients_form_validate($form, &$form_state) {
 }
 
 function open_badges_recipients_form_submit($form, &$form_state) {
-  //dpm("open_badges_recipients_form_submit: entered");
+  dpm("open_badges_recipients_form_submit: entered");
   //dpm($form, "The form array");
   //dpm($form_state, "The form_state array");
+
+  {
+    // XXX For testing only! XXX
+    //open_badges_notify_new_recipients();
+    //return;
+  }
 
   $values = $form_state['values'];
 
