@@ -530,7 +530,7 @@ function open_badges_recipients_form($form_state, $bid = NULL) {
 
     // Get a list of all current users and their badges
     $all_u = open_badges_get_users();
-    //dpm($all_u, 'The list of all the users... ???');
+    dpm($all_u, 'The list of all the users and their badges');
 
     $remove_array = array();
     $add_array = array();

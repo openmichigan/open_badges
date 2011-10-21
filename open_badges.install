@@ -151,7 +151,7 @@ function open_badges_schema() {
     'primary key' => array('bid', 'rid'),
     );
 
-  $schema['open_badges_permissions'] = array(
+  $schema['open_badges_user_preferences'] = array(
     'description' => 'Stores whether user has allowed sharing of badges with Mozilla OBI.',
     'fields' => array(
       'uid' => array(
@@ -214,7 +214,7 @@ function open_badges_schema() {
         'not null' => TRUE,
         'default' => 0,
         ),
-      'badgeallowsharing' => array(
+      'allowdisplay' => array(
         'description' => t('If this is 1, this badges may be displayed locally and shared with the Mozilla OBI.'),
         'type' => 'int',
         'size' => 'tiny',
@@ -260,7 +260,7 @@ function open_badges_schema() {
         'not null' => FALSE,
         ),
       ),
-    'primary key' => array('bid', 'uid', 'type'),
+    'primary key' => array('bid', 'uid', 'type', 'issuedate'),
     'indexes' => array(
       'uid_bid' => array('uid', 'bid'),
       'uid_weight' => array('uid', 'userweight'),

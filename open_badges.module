@@ -12,6 +12,7 @@
  * @author Nuno Veloso (nunoveloso18), http://drupal.org/user/80656
  * @author Richard Skinner (Likeless), http://drupal.org/user/310635
  * @author Nancy Wichmann (NancyDru), http://drupal.org/user/101412
+ * @author Kevin Coffman (kwcoffman), http://drupal.org/user/1016508
  *
  */
 include 'open_badges_constants.inc';
@@ -47,7 +48,7 @@ function open_badges_help($path, $arg) {
       }
       else {
         // Either we don't support reordering, or this user lacks the permission to do it.
-//        return t("These are all the badges owned by this user.");
+        return t("These are all the badges owned by this user.");
       }
 
   }
@@ -354,7 +355,7 @@ function open_badges_user($op, &$edit, &$account, $category = 'account') {
 
 /**
  * Helper function for building badge class names.
- * I was originally using form_clean_id, but it is not secure.
+ * Was originally using form_clean_id, but it is not secure.
  *
  * @param $badge - the object describing the badge.
  * @return string containing the class name.
@@ -424,10 +425,10 @@ function open_badges_userweight_form(&$form_state, $account) {
     }
   }
 
-  $permissions = open_badges_get_user_permissions($account->uid);
-  $userallowsharing = $permissions === FALSE ? FALSE : $permissions->userallowsharing;
-  $useremails = $permissions === FALSE ? OPEN_BADGES_USER_DECISION_YES : $permissions->useremails;
-  //dpm("open_badges_userweight_form: The userallowsharing value returned from open_badges_get_user_permissions: " . ($userallowsharing === FALSE ? "FALSE" : $userallowsharing));
+  $preferences = open_badges_get_user_preferences($account->uid);
+  $userallowsharing = $preferences === FALSE ? FALSE : $preferences->userallowsharing;
+  $useremails = $preferences === FALSE ? OPEN_BADGES_USER_DECISION_YES : $preferences->useremails;
+  //dpm("open_badges_userweight_form: The userallowsharing value returned from open_badges_get_user_preferences: " . ($userallowsharing === FALSE ? "FALSE" : $userallowsharing));
 
   // Pass the initial value through to the validation and submission functions
   $form_state['open_badges']['initial_values']['userallowsharing'] = $userallowsharing;
@@ -480,22 +481,22 @@ function open_badges_userweight_form(&$form_state, $account) {
     $form['criteria'][$badge->bid] = array('#value' => theme('open_badges_link', $badge->criteria, array('text' => t('Criteria'))));
     $form['evidenceurl'][$badge->bid] = array('#value' => theme('open_badges_link', $badge->evidenceurl, array('text' => t('Evidence'))));
 
-    //dpm("open_badges_userweight_form: Badge {$badge->bid} badgeallowshring is {$badge->badgeallowsharing}");
-    $form['badgeallowsharing'][$badge->bid] = array(
+    //dpm("open_badges_userweight_form: Badge {$badge->bid} badgeallowshring is {$badge->allowdisplay}");
+    $form['allowdisplay'][$badge->bid] = array(
       '#type' => 'select',
       '#title' => t('Display this badge on this site?'),
       //'#required' => TRUE,
-      '#default_value' => $badge->badgeallowsharing,
+      '#default_value' => $badge->allowdisplay,
       // Only show 'No Decision' as an option until a decision has been made
-      '#options' => $badge->badgeallowsharing == OPEN_BADGES_USER_DECISION_NONE ?
+      '#options' => $badge->allowdisplay == OPEN_BADGES_USER_DECISION_NONE ?
                     array(OPEN_BADGES_USER_DECISION_NONE => t('No Decision'),
                           OPEN_BADGES_USER_DECISION_NO => t('No'),
                           OPEN_BADGES_USER_DECISION_YES => t('Yes')) :
                     array(OPEN_BADGES_USER_DECISION_NO => t('No'),
                           OPEN_BADGES_USER_DECISION_YES => t('Yes')),
     );
-    //dpm("open_badges_userweight_form: saving initial badgeallowsharing value of {$badge->badgeallowsharing} for badge {$badge->bid}");
-    $form_state['open_badges']['initial_values'][$badge->bid]['badgeallowsharing'] = $badge->badgeallowsharing;
+    //dpm("open_badges_userweight_form: saving initial allowdisplay value of {$badge->allowdisplay} for badge {$badge->bid}");
+    $form_state['open_badges']['initial_values'][$badge->bid]['allowdisplay'] = $badge->allowdisplay;
 
     //dpm("open_badges_userweight_form: Badge {$badge->bid} has weight {$weight}, delta is {$delta}");
     $form['weight'][$badge->bid] = array(
@@ -541,33 +542,34 @@ function open_badges_userweight_form_submit($form, &$form_state) {
       $record = new StdClass();
       $record->uid = $form_state['values']['uid'];
       $record->userallowsharing = $form_state['values']['userallowsharing'];
-      $result = drupal_write_record('open_badges_permissions', $record);
+      $result = drupal_write_record('open_badges_user_preferences', $record);
       //dpm("The result of drupal_write_record() was '{$result}'");
     } else {
-      db_query("UPDATE {open_badges_permissions} SET userallowsharing = %d WHERE uid = %d",
+      db_query("UPDATE {open_badges_user_preferences} SET userallowsharing = %d WHERE uid = %d",
                $form_state['values']['userallowsharing'], $form_state['values']['uid']);
       drupal_set_message(t('Your badges will @yesno be shared with Mozilla OBI',
                array('@yesno' => $form_state['values']['userallowsharing'] == OPEN_BADGES_USER_DECISION_NO ? t('NOT') : t('now'))));
     }
   }
   if (isset($form_state['values']['useremails']) && $form_state['values']['useremails'] != $form_state['open_badges']['initial_values']['useremails']) {
-    db_query("UPDATE {open_badges_permissions} SET useremails = %d WHERE uid = %d",
+    db_query("UPDATE {open_badges_user_preferences} SET useremails = %d WHERE uid = %d",
              $form_state['values']['useremails'], $form_state['values']['uid']);
     drupal_set_message(t('You will @yesno receive emails when you earn new badges',
              array('@yesno' => $form_state['values']['useremails'] == OPEN_BADGES_USER_DECISION_NO ? t('no longer') : t('now'))));
   }
-  if (isset($form['badgeallowsharing']) && is_array($form['badgeallowsharing'])) {
-    foreach (element_children($form['badgeallowsharing']) as $bid) {
-      $badgeallowsharing = $form_state['values']['badgeallowsharing'][$bid];
-      //dpm("open_badges_userweight_form_submit: For badge {$bid}, badgeallowsharing is '{$badgeallowsharing}' initial value was: " . $form_state['open_badges']['initial_values'][$bid]['badgeallowsharing']);
-      if ($badgeallowsharing != $form_state['open_badges']['initial_values'][$bid]['badgeallowsharing']) {
-        if ($badgeallowsharing == OPEN_BADGES_USER_DECISION_NO || $badgeallowsharing == OPEN_BADGES_USER_DECISION_YES) {
-          //dpm("open_badges_userweight_form_submit: updating badgeallowsharing to {$badgeallowsharing} for badge {$bid}, uid {$form_state['values']['uid']}");
-          db_query("UPDATE {open_badges_user} SET badgeallowsharing = %d WHERE bid = %d AND uid = %d",
-                   $badgeallowsharing, $bid, $form_state['values']['uid']);
+  if (isset($form['allowdisplay']) && is_array($form['allowdisplay'])) {
+    foreach (element_children($form['allowdisplay']) as $bid) {
+      $allowdisplay = $form_state['values']['allowdisplay'][$bid];
+      //dpm("open_badges_userweight_form_submit: For badge {$bid}, allowdisplay is '{$allowdisplay}' initial value was: " . $form_state['open_badges']['initial_values'][$bid]['allowdisplay']);
+      if ($allowdisplay != $form_state['open_badges']['initial_values'][$bid]['allowdisplay']) {
+        if ($allowdisplay == OPEN_BADGES_USER_DECISION_NO || $allowdisplay == OPEN_BADGES_USER_DECISION_YES) {
+          // XXX This needs to have issuedate to make sure we only UPDATE the right one(s)????
+          //dpm("open_badges_userweight_form_submit: updating allowdisplay to {$allowdisplay} for badge {$bid}, uid {$form_state['values']['uid']}");
+          db_query("UPDATE {open_badges_user} SET allowdisplay = %d WHERE bid = %d AND uid = %d",
+                   $allowdisplay, $bid, $form_state['values']['uid']);
           drupal_set_message(t('Badge \'@name\' will @yesno be displayed',
                   array('@name' => $form['name'][$bid]['#value'],
-                  '@yesno' => $badgeallowsharing == OPEN_BADGES_USER_DECISION_NO ? t('NOT') : t('now'))),
+                  '@yesno' => $allowdisplay == OPEN_BADGES_USER_DECISION_NO ? t('NOT') : t('now'))),
                   'warning', FALSE);
         }
       }
@@ -656,7 +658,7 @@ function theme_open_badges_userweight_form($form) {
       $subrow2[] = array('data' => drupal_render($form['evidenceurl'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
 
       $subrow3[] = array('data' => drupal_render($form['expirationdate'][$key]), 'colspan' => 2, /*'width' => '20%'*/);
-      $subrow3[] = array ('data' => drupal_render($form['badgeallowsharing'][$key]), 'colspan' => 4, /*'width' => '40%'*/);
+      $subrow3[] = array ('data' => drupal_render($form['allowdisplay'][$key]), 'colspan' => 4, /*'width' => '40%'*/);
 
       $row[] = theme('table', NULL, array($subrow1, $subrow2, $subrow3));
 
@@ -1031,7 +1033,7 @@ function _generate_assertionurl($uid, $bid, $type) {
 }
 
 /**
- * Add a badge to user.
+ * Main function to add a badge to user.
  *
  * @param $uid User ID.
  * @param $bid Badge ID.
@@ -1045,16 +1047,18 @@ function _generate_assertionurl($uid, $bid, $type) {
  * @return bool with query success
  */
 function open_badges_user_add_badge($uid, $bid, $extras) {
-  //dpm($extras, "open_badges_user_add_badge: The extras");
+  dpm($extras, "open_badges_user_add_badge: The extras");
   $type = $extras['type'];
   if (isset($extras['issuedate'])) $issuedate = $extras['issuedate']; else $issuedate = time();
   if (isset($extras['expirationdate'])) $expirationdate = $extras['expirationdate']; else $expirationdate = 0;
   if (isset($extras['evidenceurl'])) $evidenceurl = $extras['evidenceurl']; else $evidenceurl = NULL;
-  // XXX TESTING XXX
-  //if (isset($extras['sharewithobi'])) $sharewithobi = $extras['sharewithobi']; else $sharewithobi = TRUE; //XXX TESTING: Default should be FALSE
-  if ($uid == 18) {
-    $sharewithobi = TRUE;
-  } else {
+
+  $preferences = open_badges_get_user_preferences($account->uid);
+  dpm($preferences, "open_badges_user_add_badge: preferences for uid {$uid}");
+  if (isset($preferences['sharewithobi'])) $sharewithobi = $preferences['sharewithobi']; else $sharewithobi = FALSE;
+  // XXX TESTING -- Only uid 18 uses real value for now! XXX
+  if ($uid != 18) {
+    dpm("open_badges_user_add_badge: setting sharewithobi to false for uid {$uid}");
     $sharewithobi = FALSE;
   }
 
@@ -1064,9 +1068,11 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
   } else {
     $assertionurl = _generate_assertionurl($uid, $bid, $type);
   }
-  open_badges_user_remove_badge($uid, $bid, $type, FALSE);
-  // The assertion code expects to find the assertionurl in a DB entry, so we can't bake
-  // the badge until after the entry has been added.  Argghh!
+  // XXX We can't just remove existing badges!?!?!
+  // XXX open_badges_user_remove_badge($uid, $bid, $type, FALSE);
+
+  // The assertion processing code expects to find the assertionurl in a DB entry,
+  // so we can't bake the badge until after the DB entry has been added.
   $dbresult = db_query('INSERT INTO {open_badges_user} (uid, bid, type, issuedate, expirationdate, evidenceurl, state, assertionurl)
                         VALUES (%d, %d, \'%s\', %d, %d, \'%s\', %d, \'%s\')',
                         $uid, $bid, $type, $issuedate, $expirationdate, $evidenceurl, OPEN_BADGES_STATE_EARNED, $assertionurl);
@@ -1074,7 +1080,7 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
     return $dbresult;
   }
   // XXX Always re-bake, or can we re-use an existing one in some (or all) cases?
-  return open_badges_bake_badge($uid, $bid, $assertionurl, $sharewithobi);
+  return open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionurl, $sharewithobi);
   // XXX Delete DB entry in the error case!!!!
   // XXX Delete DB entry in the error case!!!!
   // XXX Delete DB entry in the error case!!!!
@@ -1091,14 +1097,73 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
  * @return bool with query success
  */
 function open_badges_user_remove_badge($uid, $bid, $type = NULL, $tellOBI = FALSE) {
-  // XXX Need to remove baked image from filesystem!   Need to do a query to find out filename :-/
-  // XXX If shared with OBI, need to re-bake with expiration date
-  if (is_null($type)) {
-    return db_query('DELETE FROM {open_badges_user} WHERE uid=%d AND bid=%d', $uid, $bid);
+  dpm("open_badges_user_remove_badge: '{$uid}', '{$bid}', '{$type}'");
+  if ($type == NULL) {
+    $type = 'user';
   }
-  else {
-    return db_query('DELETE FROM {open_badges_user} WHERE uid=%d AND bid=%d AND type=\'%s\'', $uid, $bid, $type);
+  $badge = open_badges_get_user_badge($uid, $bid, $type);
+  dpm($badge, "open_badges_user_remove_badge: the returned badge for '{$uid}', '{$bid}', '{$type}'");
+
+  $originalstate = $badge->state;
+
+  // Remove baked image from filesystem
+  if (strlen($badge->bakedimage) != 0) {
+    _remove_baked_badge_file($badge->bakedimage);
   }
+
+
+  dpm("open_badges_user_remove_badge: the badge's original state is {$originalstate}");
+  switch($originalstate) {
+    // Don't remove entry, but update expiration and state
+    case OPEN_BADGES_STATE_BAKED_AND_SHARED:
+    case OPEN_BADGES_STATE_BAKED:
+      $ret = db_query('UPDATE {open_badges_user} SET state = %d, expirationdate = %d
+                       WHERE uid = %d AND bid = %d AND state = %d AND type LIKE \'%s\'',
+                       OPEN_BADGES_STATE_BAKED_AND_REVOKED, time(), $uid, $bid, $originalstate, $type);
+      if ($originalstate == OPEN_BADGES_STATE_BAKED) {
+        dpm("open_badges_user_remove_badge: skipping OBI notification for badge in state {$originalstate}");
+        break;
+      }
+      // If it has been shared with OBI, we need to "re-bake" with new expiration date
+      dpm("open_badges_user_remove_badge: attempting OBI notification for badge in state {$originalstate}");
+      $headers = array();
+      $queryarray = array();
+
+      // Construct the query string
+      $ourorigin = variable_get('open_badges_defaultissuerorigin', '');  // Assertion URL must be absolute
+      $queryarray['assertion'] = $ourorigin . '/open_badges/assertion/' . $badge->assertionurl;
+      $querystring = http_build_query($queryarray, '', '&');
+      // Add the query string to the url -- it is not 'data'!
+      $bakerserviceurl = variable_get('open_badges_badgebakingurl', '');
+      $bakerserviceurl .= '?' . $querystring;
+
+      dpm("open_badges_user_remove_badge: The baker url is '{$bakerserviceurl}'");
+
+      $bakeresult = drupal_http_request($bakerserviceurl, $headers, 'GET', NULL);
+
+      dpm($bakeresult, "open_badges_user_remove_badge: The result from the expiration request");
+
+      if ($bakeresult->code > 200) {
+        drupal_set_message("Error {$bakeresult->code}, expiring badge {$bid} for uid {$uid}", 'error');
+        watchdog('error', "Error from baking service while expiring badge for uid @uid and badge @bid : @code : @message : @reason",
+                 array('@uid' => $uid, '@bid' => $bid, '@code' => $bakeresult->code,
+                 '@message' => $bakeresult->error, '@reason' => $bakeresult->data), WATCHDOG_WARNING);
+        return FALSE;
+      }
+      break;
+    // If we had an error baking the badge, just delete it
+    case OPEN_BADGES_STATE_EARNED:
+      if (is_null($type)) {
+        $ret = db_query('DELETE FROM {open_badges_user} WHERE uid=%d AND bid=%d AND state=%d', $uid, $bid, OPEN_BADGES_STATE_EARNED);
+      } else {
+        $ret = db_query('DELETE FROM {open_badges_user} WHERE uid=%d AND bid=%d AND state=%d AND type=\'%s\'', $uid, $bid, OPEN_BADGES_STATE_EARNED, $type);
+      }
+      break;
+    default:
+      drupal_set_message("Unimplemented case for removing badge {$bid} for uid {$uid} in state {$originalstate}");
+      break;
+  }
+  return $ret;
 }
 
 
@@ -1117,7 +1182,7 @@ function open_badges_get_badges($uid, $options = array()) {
   static $badges = array(), $past_uid, $past_options;
   global $user;
 
-  //dpm("open_badges_get_badges: uid: '{$uid}', past_uid: '{$past_uid}', current user's id: {$user->uid}");
+  dpm("open_badges_get_badges: uid: '{$uid}', past_uid: '{$past_uid}', current user's id: {$user->uid}");
   if (isset($badges[$uid])) {
     //dpm($badges[$uid], "open_badges_get_badges: CACHED badges[uid] for uid $uid");
     return $badges[$uid];
@@ -1129,7 +1194,7 @@ function open_badges_get_badges($uid, $options = array()) {
   if (empty($past_uid) || $past_uid !== $uid || $past_options !== $options ) {
     $past_uid = $uid;
     if ($uid == 'all' || $uid == 'select') {
-      //dpm("open_badges_get_badges: getting '{$uid}' badges");
+      dpm("open_badges_get_badges: getting '{$uid}' badges");
       $sql = db_query('SELECT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
         b.unhideable, b.fixedweight, b.doesnotcounttolimit, b.tid,
         FROM {open_badges_badges} b
@@ -1139,9 +1204,9 @@ function open_badges_get_badges($uid, $options = array()) {
       $usr = db_result(db_query('SELECT COUNT(uid) FROM {users} WHERE uid = %d AND status = 0', $uid));
 
       if ($usr && variable_get('open_badges_showblocked', 0)) {
-        //dpm("open_badges_get_badges: getting blocked users badges");
+        dpm("open_badges_get_badges: getting blocked users badges");
         $sql = db_query('SELECT DISTINCT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
-          b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidenceurl,
+          b.unhideable, b.fixedweight, b.doesnotcounttolimit, b.tid, u.allowdisplay, u.userweight, u.issuedate, u.expirationdate, u.evidenceurl, u.state,
           CASE WHEN b.fixedweight = 1 THEN b.weight ELSE COALESCE(u.userweight,b.weight) END coalescedweight
           FROM {open_badges_badges} b
             INNER JOIN {open_badges_user} u ON b.bid = u.bid
@@ -1151,9 +1216,9 @@ function open_badges_get_badges($uid, $options = array()) {
           $uid);
       }
       else {
-        //dpm("open_badges_get_badges: getting normal badge list for uid {$uid}");
+        dpm("open_badges_get_badges: getting normal badge list for uid {$uid}");
         $query = 'SELECT DISTINCT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
-          b.unhideable, b.fixedweight, b.doesnotcounttolimit, u.badgeallowsharing, u.userweight, b.tid, u.issuedate, u.expirationdate, u.evidenceurl,
+          b.unhideable, b.fixedweight, b.doesnotcounttolimit, b.tid, u.allowdisplay, u.userweight, u.issuedate, u.expirationdate, u.evidenceurl, u.state,
           CASE WHEN b.fixedweight = 1 THEN b.weight ELSE COALESCE(u.userweight,b.weight) END coalescedweight
           FROM {open_badges_badges} b
             INNER JOIN {open_badges_user} u ON b.bid = u.bid
@@ -1175,11 +1240,15 @@ function open_badges_get_badges($uid, $options = array()) {
     }
 
 
-    $checkallowsharing =  user_access('manage badges') == FALSE && ($uid != 'all' && $uid != 'select' && $uid != $user->uid);
-    //dpm("open_badges_get_badges: checkallowsharing is " . ($checkallowsharing ? "TRUE" : "FALSE"));
+    $checksharingoption = user_access('manage badges') == FALSE && ($uid != 'all' && $uid != 'select' && $uid != $user->uid);
+    //dpm("open_badges_get_badges: checksharingoption is " . ($checksharingoption ? "TRUE" : "FALSE"));
     while ($badge = db_fetch_object($sql)) {
       // Display the badge if there's no limit or if the badge is unhideable or if we are within our limit.
-      if ($checkallowsharing && $badge->badgeallowsharing != OPEN_BADGES_USER_DECISION_YES)
+      if ($checksharingoption && $badge->allowdisplay != OPEN_BADGES_USER_DECISION_YES)
+        continue;
+      // XXX Need a way to return expired or revoked badges and indicate they are expired or revoked!!!
+      dpm("open_badges_get_badges: badge {$badge->bid} for user {$badge->uid} has state {$badge->state}");
+      if (isset($badge->state) && $badge->state != OPEN_BADGES_STATE_BAKED && $badge->state != OPEN_BADGES_STATE_BAKED_AND_SHARED)
         continue;
       if ($limit != 0 || $badge->unhideable == 1) {
         if ($uid == 'select') {
@@ -1213,20 +1282,27 @@ function open_badges_get_badges($uid, $options = array()) {
 function open_badges_get_badge_recipients($bid) {
   static $recipients = array();
 
-  //dpm("open_badges_get_badge_recipients: entered");
+  dpm("open_badges_get_badge_recipients: entered");
   // Return cached value if we get called multiple times for some reason
   if (isset($recipients[$bid])) {
+    dpm("open_badges_get_badge_recipients: returning cached data!");
     return $recipients[$bid];
   }
 
-  $sql = db_query('SELECT obu.uid, obu.type, u.name, u.mail
+  $sql = db_query('SELECT obu.uid, obu.type, obu.state, u.name, u.mail
                    FROM {open_badges_user} obu
                    LEFT JOIN {users} u ON obu.uid = u.uid
                    WHERE obu.bid = %d', $bid);
   while ($r = db_fetch_object($sql)) {
+    // Ignore badges that are revoked
+    dpm("open_badges_get_badge_recipients: badge {$bid} for user {$r->uid} has state {$r->state}");
+    if ($r->state != OPEN_BADGES_STATE_BAKED && $r->state != OPEN_BADGES_STATE_BAKED_AND_SHARED) {
+      dpm("open_badges_get_badge_recipients: skipping badge {$bid} for user {$r->uid} because of state {$r->state}");
+      continue;
+    }
     $recipients[$bid][] = $r;
   }
-  //dpm($recipients[$bid], "open_badges_get_badge_recipients: returning");
+  dpm($recipients[$bid], "open_badges_get_badge_recipients: returning");
   return $recipients[$bid];
 }
 
@@ -1242,16 +1318,18 @@ function open_badges_get_badge($bid) {
  * Return a user's badge object for given badge id and type
  */
 function open_badges_get_user_badge($uid, $bid, $type) {
-  return db_fetch_object(db_query('SELECT * FROM {open_badges_user} WHERE uid = %d AND bid = %d AND type LIKE \'%s\'', $uid, $bid, $type));
+  return db_fetch_object(db_query('SELECT * FROM {open_badges_user}
+                                   WHERE uid = %d AND bid = %d AND state != %d AND type LIKE \'%%%s%%\'',
+                                   $uid, $bid, OPEN_BADGES_STATE_BAKED_AND_EXPIRED, $type));
 }
 
 /**
- * Return whether user has given permission to share badges with Mozilla OBI
- * (returns FALSE if the user has not made a decision yet)
+ * Return user preferences. (Allow sharing of badges with Mozilla OBI, receive emails about new badges.)
+ * @return The user's preferences, or FALSE if the user has not set anything
  */
-function open_badges_get_user_permissions($uid) {
-  //dpm("open_badges_get_user_permissions: entered with uid {$uid}");
-  return db_fetch_object(db_query('SELECT * FROM {open_badges_permissions} WHERE uid = %d', $uid));
+function open_badges_get_user_preferences($uid) {
+  //dpm("open_badges_get_user_preferences: entered with uid {$uid}");
+  return db_fetch_object(db_query('SELECT * FROM {open_badges_user_preferences} WHERE uid = %d', $uid));
 }
 
 function open_badges_delete_form($form_state, $bid) {
@@ -1267,6 +1345,7 @@ function open_badges_delete_form($form_state, $bid) {
 function open_badges_delete_form_submit($form, &$form_state) {
   $bid = $form_state['values']['bid'];
   db_query("DELETE FROM {open_badges_badges} WHERE bid = %d", $bid);
+  // XXX Much more to do as far as notifying OBI about these?!?
   db_query("DELETE FROM {open_badges_user} WHERE bid = %d", $bid);
   db_query("DELETE FROM {open_badges_roles} WHERE bid = %d", $bid);
   drupal_set_message(t('Badge deleted.'));
@@ -1313,23 +1392,27 @@ function open_badges_get_roles($rid = NULL, $options = array()) {
  * @return An array containing a row for each user and which, if any, badges they've been issued
  */
 function open_badges_get_users() {
-  $usrs = array();
-  $sql = db_query('SELECT u.uid, u.name, u.mail, obu.bid, obu.type
+  $users = array();
+  $sql = db_query('SELECT u.uid, u.name, u.mail, obu.bid, obu.type, obu.state
                    FROM {users} u
                    LEFT JOIN {open_badges_user} obu
                    ON obu.uid = u.uid
                    ORDER BY u.uid ASC');
   while ($row = db_fetch_object($sql)) {
     //dpm($row, 'get_users: A raw row from the db_query');
+    if (isset($row->bid) && ($row->state == OPEN_BADGES_STATE_BAKED_AND_REVOKED || $row->state == OPEN_BADGES_STATE_BAKED_AND_EXPIRED)) {
+      // Ignore revoked or expired badges
+      continue;
+    }
     if (isset($row->bid)) {
       //dpm("uid '{$row->uid}' name '{$row->name}' bid '{$row->bid}' type '{$row->type}'");
-      $usrs[$row->uid][$row->type][$row->bid] = $row;
+      $users[$row->uid][$row->type][$row->bid] = $row;
     } else {
       //dpm("uid '{$row->uid}' name '{$row->name}'");
-      $usrs[$row->uid]['none'] = $row;
+      $users[$row->uid]['none'] = $row;
     }
   }
-  return $usrs;
+  return $users;
 }
 
 /**
@@ -1828,18 +1911,19 @@ function open_badges_block_save($delta = 0, $edit = array()) {
 function open_badges_process_new_sharing_decision($uid, $decision) {
   switch($decision) {
     case OPEN_BADGES_USER_DECISION_NO:
-      $newstate = OPEN_BADGES_STATE_BAKED_AND_EXPIRED;
+      $newstate = OPEN_BADGES_STATE_BAKED_NO_DISPLAY;
       $oldstate1 = OPEN_BADGES_STATE_BAKED;
       $oldstate2 = OPEN_BADGES_STATE_BAKED_AND_SHARED;
       break;
     case OPEN_BADGES_USER_DECISION_YES:
       $newstate = OPEN_BADGES_STATE_BAKED_AND_SHARED;
       $oldstate1 = OPEN_BADGES_STATE_BAKED;
-      $oldstate2 = OPEN_BADGES_STATE_BAKED_AND_EXPIRED;
+      $oldstate2 = OPEN_BADGES_STATE_BAKED_NO_DISPLAY;
       break;
   }
   // XXX Need to tell OBI about the change in status before updating the Database!?
-  $result = db_query('UPDATE {open_badges_user} SET state = %d WHERE uid = %d AND (state = %d OR state %d',
+  // XXX Need issuedate to UPDATE the right one(s) here???
+  $result = db_query('UPDATE {open_badges_user} SET state = %d WHERE uid = %d AND (state = %d OR state %d)',
                      $newstate, $uid, $oldstate1, $oldstate2);
 }
 
@@ -1862,6 +1946,16 @@ function _baked_badge_dir() {
     return $dir;
   }
 }
+
+/**
+ * Remove a baked badge image upon badge removal
+ *
+ * returns TRUE on success, FALSE on failure
+ */
+function _remove_baked_badge_file($bakedimagepath) {
+  $return = unlink($bakedimagepath);
+}
+
 /**
  * Save a baked badge image and update the database
  *
@@ -1880,9 +1974,9 @@ function _save_baked_badge($assertionpath, $badgeblob) {
   return $filename;
 }
 
-function _update_badge_state_and_bakedimage($uid, $bid, $newstate, $bakedimage) {
-  $result =  db_query('UPDATE {open_badges_user} SET state = %d, bakedimage = \'%s\' WHERE uid = %d AND bid = %d',
-                      $newstate, $bakedimage, $uid, $bid);
+function _update_badge_state_and_bakedimage($uid, $bid, $type, $issuedate, $newstate, $bakedimage) {
+  $result =  db_query('UPDATE {open_badges_user} SET state = %d, bakedimage = \'%s\' WHERE uid = %d AND bid = %d AND type LIKE \'%%%s%%\' AND issuedate = %d',
+                      $newstate, $bakedimage, $uid, $bid, $type, $issuedate);
   //dpm("The db state and bakedimage update returned '{$result}'");
   //dpm($result, "The result of _update_badges_state_and_bakedimage");
   return ($result === FALSE ? FALSE : TRUE);
@@ -1891,13 +1985,12 @@ function _update_badge_state_and_bakedimage($uid, $bid, $newstate, $bakedimage) 
 /**
  * Bake a single badge
  */
-function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALSE) {
+function open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionpath, $sendtobackpack=FALSE) {
   $headers = array();
   $queryarray = array();
-  // Assertion URL must be absolute
-  $ourorigin = variable_get('open_badges_defaultissuerorigin', '');
 
   // Construct the query string
+  $ourorigin = variable_get('open_badges_defaultissuerorigin', '');  // Assertion URL must be absolute
   $queryarray['assertion'] = $ourorigin . '/open_badges/assertion/' . $assertionpath;
   $queryarray['award'] = $sendtobackpack ? "true" : "false";
   $querystring = http_build_query($queryarray, '', '&');
@@ -1909,13 +2002,22 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
 
   $bakeresult = drupal_http_request($bakerserviceurl, $headers, 'GET', NULL);
 
-  //dpm($bakeresult, "open_badges_bake_badge: The result from the baking request");
+  dpm($bakeresult, "open_badges_bake_badge: The result from the baking request");
 
   if ($bakeresult->code > 200) {
     drupal_set_message("Error {$bakeresult->code}, baking badge {$bid} for uid {$uid}", 'error');
     watchdog('error', "Error from baking service for uid @uid and badge @bid : @code : @message : @reason",
              array('@uid' => $uid, '@bid' => $bid, '@code' => $bakeresult->code,
              '@message' => $bakeresult->error, '@reason' => $bakeresult->data), WATCHDOG_WARNING);
+    open_badges_user_remove_badge($uid, $bid, $type);
+    return FALSE;
+  }
+
+  if ($bakeresult->data === NULL || strlen($bakeresult->data) == 0) {
+    drupal_set_message("Error, no response from the baking service while baking badge {$bid} for uid {$uid}", 'error');
+    watchdog('error', "Error, no response from the baking service while baking badge for uid @uid and badge @bid",
+             array('@uid' => $uid, '@bid' => $bid), WATCHDOG_WARNING);
+    open_badges_user_remove_badge($uid, $bid, $type);
     return FALSE;
   }
 
@@ -1925,6 +2027,7 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
     drupal_set_message("Error saving baked badge to path {$assertionpath} for uid {$uid} and badge {$bid}", 'error');
     watchdog('error', "Error saving baked badge to path @path for uid @uid and badge @bid.",
              array('@uid' => $uid, '@bid' => $bid, '@path' => $assertionpath), WATCHDOG_WARNING);
+    open_badges_user_remove_badge($uid, $bid, $type);
     return FALSE;
   }
 
@@ -1932,11 +2035,11 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
   $newstate = OPEN_BADGES_STATE_BAKED;
   if ($sendtobackpack === TRUE) {
     dpm("Would be checking for x-badge-awarded header value");
-    //if (isset($bakeresult['headers']['x-badge-awarded']) && $bakeresult['headers']['x-badge-awarded'] != 'false') {
-    //  $newstate = OPEN_BADGES_STATE_BAKED_AND_SHARED;
-    //}
+    if (isset($bakeresult->headers['x-badge-awarded']) && $bakeresult->headers['x-badge-awarded'] != 'false') {
+      $newstate = OPEN_BADGES_STATE_BAKED_AND_SHARED;
+    }
   }
-  return _update_badge_state_and_bakedimage($uid, $bid, $newstate, $bakedimage);
+  return _update_badge_state_and_bakedimage($uid, $bid, $type, $issuedate, $newstate, $bakedimage);
 }
 
 /**
@@ -1944,7 +2047,7 @@ function open_badges_bake_badge($uid, $bid, $assertionpath, $sendtobackpack=FALS
  */
 function open_badges_bake_badges() {
   $result = db_query('SELECT * FROM {open_badges_user} obu
-                      LEFT JOIN {open_badges_permissions} obp ON obu.uid = obp.uid
+                      LEFT JOIN {open_badges_user_preferences} obp ON obu.uid = obp.uid
                       WHERE state = %d', OPEN_BADGES_STATE_EARNED);
   while (($badge = db_fetch_object($result)) != NULL) {
     open_badges_bake_badge($badge->uid, $badge->bid, $badge->assertionurl, (bool) $badge->userallowsharing == OPEN_BADGES_USER_DECISION_YES);
@@ -1964,7 +2067,7 @@ function open_badges_bake_badges() {
   SELECT * FROM open_badges_user obu
          LEFT JOIN users u ON obu.uid = u.uid
          LEFT JOIN open_badges_badges obb ON obu.bid = obb.bid
-         LEFT JOIN open_badges_permissions obp ON obu.uid = obp.uid AND obp.useremails = 2
+         LEFT JOIN open_badges_user_preferences obp ON obu.uid = obp.uid AND obp.useremails = 2
          WHERE obu.usernotified = 0 AND (obu.state = 2 OR obu.state = 3)
          ORDER BY obu.uid;
  *
@@ -1972,7 +2075,7 @@ function open_badges_notify_new_recipients_bulk() {
   $result = db_query('SELECT * FROM {open_badges_user} obu
                       LEFT JOIN {users} u ON obu.uid = u.uid
                       LEFT JOIN {open_badges_badges} obb ON obu.bid = obb.bid
-                      LEFT JOIN {open_badges_permissions} obp ON obu.uid = obp.uid AND obp.useremails = %d
+                      LEFT JOIN {open_badges_user_preferences} obp ON obu.uid = obp.uid AND obp.useremails = %d
                       WHERE obu.usernotified = %d AND (obu.state = %d OR obu.state =  %d)
                       ORDER BY obu.uid',
                       USER_BADGES_USER_DECISION_YES, 0, OPEN_BADGES_STATE_BAKED, OPEN_BADGES_STATE_BAKED_AND_SHARED);
@@ -2035,11 +2138,11 @@ function open_badges_notify_new_recipients() {
 
   $from = variable_get('open_badges_fromaddress', NULL);
 
-  $sql = "SELECT obu.uid, obu.bid, obu.bakedimage, obu.state,
+  $sql = "SELECT obu.uid, obu.bid, obu.bakedimage, obu.state, obu.type, obu.issuedate,
                  obb.name, obb.criteria, obb.description, obp.useremails
           FROM {open_badges_user} obu
           LEFT JOIN {open_badges_badges} obb ON obu.bid = obb.bid
-          LEFT JOIN {open_badges_permissions} obp ON obu.uid = obp.uid
+          LEFT JOIN {open_badges_user_preferences} obp ON obu.uid = obp.uid
           WHERE obu.usernotified = %d AND (obu.state = %d OR obu.state =  %d)
           ORDER BY obu.uid";
 
@@ -2076,7 +2179,9 @@ function open_badges_notify_new_recipients() {
 
     $message = _open_badges_send_mimemail($key, $params);
 
-    //$updateresult = db_query('UPDATE {open_badges_user} SET usernotified = %d WHERE uid = %d and bid = %d', 1, $row->uid, $row->bid);
+    $updateresult = db_query('UPDATE {open_badges_user} SET usernotified = %d
+                              WHERE uid = %d AND bid = %d AND type LIKE \'%%%s%%\' AND issuedate = %d',
+                              1, $row->uid, $row->bid, $row->type, $row->issuedate);
     //dpm($updateresult, "open_badges_notify_new_recipients: The result of the UPDATE query");
   }
   //dpm("open_badges_notify_new_recipients: exiting");
