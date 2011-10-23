@@ -425,16 +425,16 @@ function open_badges_userweight_form(&$form_state, $account) {
     }
   }
 
-  $preferences = open_badges_get_user_preferences($account->uid);
-  $userallowsharing = $preferences === FALSE ? FALSE : $preferences->userallowsharing;
-  $useremails = $preferences === FALSE ? OPEN_BADGES_USER_DECISION_YES : $preferences->useremails;
-  //dpm("open_badges_userweight_form: The userallowsharing value returned from open_badges_get_user_preferences: " . ($userallowsharing === FALSE ? "FALSE" : $userallowsharing));
+  $userprefs = open_badges_get_userprefs($account->uid);
+  $userallowsharing = $userprefs['userallowsharing'];
+  $useremails = $userprefs['useremails'];
+  //dpm("open_badges_userweight_form: The userallowsharing value returned from open_badges_get_userprefs: " . ($userallowsharing === FALSE ? "FALSE" : $userallowsharing));
 
   // Pass the initial value through to the validation and submission functions
   $form_state['open_badges']['initial_values']['userallowsharing'] = $userallowsharing;
   $form_state['open_badges']['initial_values']['useremails'] = $useremails;
   // Only show 'No Decision' as an option until a decision has been made
-  if ($userallowsharing === FALSE) {
+  if ($userallowsharing == OPEN_BADGES_USER_DECISION_NONE) {
     drupal_set_message(t('Note: You have not yet decided whether to share badges with Mozilla\'s OBI (Open Badge Infrastructure)'), 'warning', FALSE);
   }
 
@@ -442,8 +442,8 @@ function open_badges_userweight_form(&$form_state, $account) {
     '#type' => 'select',
     '#title' => t('Share all badges with Mozilla\'s OBI (Open Badge Infrastructure)?'),
     //'#required' => TRUE,
-    '#default_value' => $userallowsharing == OPEN_BADGES_USER_DECISION_NONE ? FALSE : $userallowsharing,
-    '#options' => $userallowsharing === FALSE ?
+    '#default_value' => $userallowsharing,
+    '#options' => ($userallowsharing == FALSE | $userallowsharing == OPEN_BADGES_USER_DECISION_NONE) ?
                   array(OPEN_BADGES_USER_DECISION_NONE => t('No Decision'),
                         OPEN_BADGES_USER_DECISION_NO => t('No'),
                         OPEN_BADGES_USER_DECISION_YES => t('Yes')) :
@@ -455,7 +455,7 @@ function open_badges_userweight_form(&$form_state, $account) {
     '#type' => 'select',
     '#title' => t('Receive emails when new badges are earned?'),
     //'#required' => TRUE,
-    '#default_value' => $useremails,
+    '#default_value' => $useremails == FALSE ? OPEN_BADGES_USER_DECISION_YES : $useremails,
     '#options' => array(OPEN_BADGES_USER_DECISION_NO => t('No'),
                         OPEN_BADGES_USER_DECISION_YES => t('Yes')) ,
   );
@@ -538,22 +538,30 @@ function open_badges_userweight_form_submit($form, &$form_state) {
     drupal_set_message(t('Your badge order has been updated.'));
   }
   if (isset($form_state['values']['userallowsharing']) && $form_state['values']['userallowsharing'] != $form_state['open_badges']['initial_values']['userallowsharing']) {
-    if ($form_state['open_badges']['initial_values']['userallowsharing'] === FALSE) {
+    if ($form_state['open_badges']['initial_values']['userallowsharing'] === FALSE && $form_state['open_badges']['initial_values']['useremails'] === FALSE) {
       $record = new StdClass();
       $record->uid = $form_state['values']['uid'];
       $record->userallowsharing = $form_state['values']['userallowsharing'];
       $result = drupal_write_record('open_badges_user_preferences', $record);
-      //dpm("The result of drupal_write_record() was '{$result}'");
+      dpm("The result of drupal_write_record() was '{$result}'");
     } else {
       db_query("UPDATE {open_badges_user_preferences} SET userallowsharing = %d WHERE uid = %d",
                $form_state['values']['userallowsharing'], $form_state['values']['uid']);
-      drupal_set_message(t('Your badges will @yesno be shared with Mozilla OBI',
-               array('@yesno' => $form_state['values']['userallowsharing'] == OPEN_BADGES_USER_DECISION_NO ? t('NOT') : t('now'))));
     }
+    drupal_set_message(t('Your badges will @yesno be shared with Mozilla OBI',
+             array('@yesno' => $form_state['values']['userallowsharing'] == OPEN_BADGES_USER_DECISION_NO ? t('NOT') : t('now'))));
   }
   if (isset($form_state['values']['useremails']) && $form_state['values']['useremails'] != $form_state['open_badges']['initial_values']['useremails']) {
-    db_query("UPDATE {open_badges_user_preferences} SET useremails = %d WHERE uid = %d",
-             $form_state['values']['useremails'], $form_state['values']['uid']);
+    if ($form_state['open_badges']['initial_values']['userallowsharing'] === FALSE && $form_state['open_badges']['initial_values']['useremails'] === FALSE) {
+      $record = new StdClass();
+      $record->uid = $form_state['values']['uid'];
+      $record->useremails = $form_state['values']['useremails'];
+      $result = drupal_write_record('open_badges_user_preferences', $record);
+      dpm("The result of drupal_write_record() was '{$result}'");
+    } else {
+      db_query("UPDATE {open_badges_user_preferences} SET useremails = %d WHERE uid = %d",
+               $form_state['values']['useremails'], $form_state['values']['uid']);
+    }
     drupal_set_message(t('You will @yesno receive emails when you earn new badges',
              array('@yesno' => $form_state['values']['useremails'] == OPEN_BADGES_USER_DECISION_NO ? t('no longer') : t('now'))));
   }
@@ -746,7 +754,7 @@ function open_badges_badge_autocomplete_validation($value) {
 
 
 /**
- * Define the page on user/uid/badges/edit.
+ * Define the page on user/uid/open_badges/edit.
  */
 function open_badges_page($uid) {
   $account = user_load($uid);
@@ -758,7 +766,7 @@ function open_badges_page($uid) {
 }
 
 /**
- * Define the page on user/uid/badges.
+ * Define the page on user/uid/open_badges.
  */
 function open_badges_userweight_page($uid) {
   $account = user_load($uid);
@@ -966,7 +974,7 @@ function open_badges_change_form_submit($form, &$form_state) {
   }
   if (count($badges_to_go)) {
     foreach ($badges_to_go as $bid) {
-      open_badges_user_remove_badge($uid, $bid); // XXX Need to delete from OBI depending on $type?
+      open_badges_user_remove_badge($uid, $bid);
     }
     drupal_set_message(t('!removalcount badge(s) removed.', array('!removalcount' => count($badges_to_go))));
   }
@@ -1049,17 +1057,17 @@ function _generate_assertionurl($uid, $bid, $type) {
 function open_badges_user_add_badge($uid, $bid, $extras) {
   dpm($extras, "open_badges_user_add_badge: The extras");
   $type = $extras['type'];
-  if (isset($extras['issuedate'])) $issuedate = $extras['issuedate']; else $issuedate = time();
-  if (isset($extras['expirationdate'])) $expirationdate = $extras['expirationdate']; else $expirationdate = 0;
-  if (isset($extras['evidenceurl'])) $evidenceurl = $extras['evidenceurl']; else $evidenceurl = NULL;
+  $issuedate = isset($extras['issuedate']) ? $extras['issuedate'] : time();
+  $expirationdate = isset($extras['expirationdate']) ? $extras['expirationdate'] : 0;
+  $evidenceurl = isset($extras['evidenceurl']) ? $extras['evidenceurl'] : NULL;
 
-  $preferences = open_badges_get_user_preferences($account->uid);
-  dpm($preferences, "open_badges_user_add_badge: preferences for uid {$uid}");
-  if (isset($preferences['sharewithobi'])) $sharewithobi = $preferences['sharewithobi']; else $sharewithobi = FALSE;
+  $userprefs = open_badges_get_userprefs($uid);
+  dpm($userprefs, "open_badges_user_add_badge: preferences for uid {$uid}");
+  $sendtobackpack = $userprefs['userallowsharing'] == OPEN_BADGES_USER_DECISION_YES ? TRUE : FALSE;
   // XXX TESTING -- Only uid 18 uses real value for now! XXX
   if ($uid != 18) {
-    dpm("open_badges_user_add_badge: setting sharewithobi to false for uid {$uid}");
-    $sharewithobi = FALSE;
+    dpm("open_badges_user_add_badge: setting sendtobackpack to FALSE for uid {$uid}");
+    $sendtobackpack = FALSE;
   }
 
   $existingbadge = open_badges_get_user_badge($uid, $bid, $type);
@@ -1068,8 +1076,6 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
   } else {
     $assertionurl = _generate_assertionurl($uid, $bid, $type);
   }
-  // XXX We can't just remove existing badges!?!?!
-  // XXX open_badges_user_remove_badge($uid, $bid, $type, FALSE);
 
   // The assertion processing code expects to find the assertionurl in a DB entry,
   // so we can't bake the badge until after the DB entry has been added.
@@ -1080,10 +1086,10 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
     return $dbresult;
   }
   // XXX Always re-bake, or can we re-use an existing one in some (or all) cases?
-  return open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionurl, $sharewithobi);
-  // XXX Delete DB entry in the error case!!!!
-  // XXX Delete DB entry in the error case!!!!
-  // XXX Delete DB entry in the error case!!!!
+  return open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionurl, $sendtobackpack);
+  //     Delete DB entry in the error case!
+  // XXX Delete DB entry in the error case!
+  //     Delete DB entry in the error case!
 }
 
 
@@ -1093,10 +1099,9 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
  * @param $uid User ID.
  * @param $bid Badge ID.
  * @param $type Whether set as part of the role ('role), or individually assigned ('user').
- * @param $tellOBI Whether to inform Mozilla OBI about this deletion
  * @return bool with query success
  */
-function open_badges_user_remove_badge($uid, $bid, $type = NULL, $tellOBI = FALSE) {
+function open_badges_user_remove_badge($uid, $bid, $type = NULL) {
   dpm("open_badges_user_remove_badge: '{$uid}', '{$bid}', '{$type}'");
   if ($type == NULL) {
     $type = 'user';
@@ -1132,6 +1137,7 @@ function open_badges_user_remove_badge($uid, $bid, $type = NULL, $tellOBI = FALS
       // Construct the query string
       $ourorigin = variable_get('open_badges_defaultissuerorigin', '');  // Assertion URL must be absolute
       $queryarray['assertion'] = $ourorigin . '/open_badges/assertion/' . $badge->assertionurl;
+      $queryarray['award'] = "true";
       $querystring = http_build_query($queryarray, '', '&');
       // Add the query string to the url -- it is not 'data'!
       $bakerserviceurl = variable_get('open_badges_badgebakingurl', '');
@@ -1141,7 +1147,7 @@ function open_badges_user_remove_badge($uid, $bid, $type = NULL, $tellOBI = FALS
 
       $bakeresult = drupal_http_request($bakerserviceurl, $headers, 'GET', NULL);
 
-      dpm($bakeresult, "open_badges_user_remove_badge: The result from the expiration request");
+      dpm("open_badges_user_remove_badge: The result of the expiration request: {$bakeresult->code}");
 
       if ($bakeresult->code > 200) {
         drupal_set_message("Error {$bakeresult->code}, expiring badge {$bid} for uid {$uid}", 'error');
@@ -1316,20 +1322,33 @@ function open_badges_get_badge($bid) {
 
 /**
  * Return a user's badge object for given badge id and type
+ * Ignores badges that have been revoked.
+ *
  */
 function open_badges_get_user_badge($uid, $bid, $type) {
   return db_fetch_object(db_query('SELECT * FROM {open_badges_user}
                                    WHERE uid = %d AND bid = %d AND state != %d AND type LIKE \'%%%s%%\'',
-                                   $uid, $bid, OPEN_BADGES_STATE_BAKED_AND_EXPIRED, $type));
+                                   $uid, $bid, OPEN_BADGES_STATE_BAKED_AND_REVOKED, $type));
 }
 
 /**
  * Return user preferences. (Allow sharing of badges with Mozilla OBI, receive emails about new badges.)
- * @return The user's preferences, or FALSE if the user has not set anything
+ * @return The user's preferences, or if the user has not set anything, the default values.
  */
-function open_badges_get_user_preferences($uid) {
-  //dpm("open_badges_get_user_preferences: entered with uid {$uid}");
-  return db_fetch_object(db_query('SELECT * FROM {open_badges_user_preferences} WHERE uid = %d', $uid));
+function open_badges_get_userprefs($uid) {
+  $prefs = array();
+  dpm("open_badges_get_userprefs: entered with uid {$uid}");
+  $res =  db_fetch_object(db_query('SELECT * FROM {open_badges_user_preferences} WHERE uid = %d', $uid));
+  if ($res === FALSE) {
+    dpm("open_badges_get_userprefs: setting defaults for uid {$uid}");
+    $prefs['uid'] = $uid;
+    $prefs['userallowsharing'] = FALSE;
+    $prefs['useremails'] = FALSE;
+  } else {
+    $prefs = (array) $res;
+  }
+  dpm($prefs, "open_badges_get_userprefs: preferences for uid {$uid}");
+  return (array) $prefs;
 }
 
 function open_badges_delete_form($form_state, $bid) {
@@ -1400,8 +1419,8 @@ function open_badges_get_users() {
                    ORDER BY u.uid ASC');
   while ($row = db_fetch_object($sql)) {
     //dpm($row, 'get_users: A raw row from the db_query');
-    if (isset($row->bid) && ($row->state == OPEN_BADGES_STATE_BAKED_AND_REVOKED || $row->state == OPEN_BADGES_STATE_BAKED_AND_EXPIRED)) {
-      // Ignore revoked or expired badges
+    if (isset($row->bid) && $row->state == OPEN_BADGES_STATE_BAKED_AND_REVOKED) {
+      // Ignore revoked badges
       continue;
     }
     if (isset($row->bid)) {
@@ -1755,7 +1774,7 @@ function open_badges_remove_badge_action(&$account, $context = array()) {
   $badges = open_badges_get_badges('all');
 
   foreach ($context['badges'] as $bid) {
-    $success = (boolean) open_badges_user_remove_badge($uid, $bid, 'uid', TRUE);
+    $success = (boolean) open_badges_user_remove_badge($uid, $bid, 'user');
     if ($success) {
       watchdog('action', 'Removed open badge %badge from user %name.', array('%name' => check_plain($user->name), '%badge' => check_plain($badges[$bid]->name)));
     }
@@ -2002,7 +2021,7 @@ function open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionpath, $
 
   $bakeresult = drupal_http_request($bakerserviceurl, $headers, 'GET', NULL);
 
-  dpm($bakeresult, "open_badges_bake_badge: The result from the baking request");
+  dpm("open_badges_bake_badge: The return code from the baking request: {$bakeresult->code}");
 
   if ($bakeresult->code > 200) {
     drupal_set_message("Error {$bakeresult->code}, baking badge {$bid} for uid {$uid}", 'error');
@@ -2034,11 +2053,13 @@ function open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionpath, $
   // Check for header indicating whether it was successfully sent to the backpack (if requested)
   $newstate = OPEN_BADGES_STATE_BAKED;
   if ($sendtobackpack === TRUE) {
-    dpm("Would be checking for x-badge-awarded header value");
+    dpm("open_badges_bake_badge: Checking for x-badge-awarded header value");
     if (isset($bakeresult->headers['x-badge-awarded']) && $bakeresult->headers['x-badge-awarded'] != 'false') {
+      dpm("open_badges_bake_badge: Badge has been sent to backpack!");
       $newstate = OPEN_BADGES_STATE_BAKED_AND_SHARED;
     }
   }
+  dpm("open_badges_bake_badge: sendtobackpack: {$sendtobackpack}, newstate: {$newstate}");
   return _update_badge_state_and_bakedimage($uid, $bid, $type, $issuedate, $newstate, $bakedimage);
 }
 
@@ -2050,7 +2071,7 @@ function open_badges_bake_badges() {
                       LEFT JOIN {open_badges_user_preferences} obp ON obu.uid = obp.uid
                       WHERE state = %d', OPEN_BADGES_STATE_EARNED);
   while (($badge = db_fetch_object($result)) != NULL) {
-    open_badges_bake_badge($badge->uid, $badge->bid, $badge->assertionurl, (bool) $badge->userallowsharing == OPEN_BADGES_USER_DECISION_YES);
+    open_badges_bake_badge($badge->uid, $badge->bid, $badge->issuedate, $badge->assertionurl, (bool) $badge->userallowsharing == OPEN_BADGES_USER_DECISION_YES);
   }
 }
 
@@ -2298,14 +2319,16 @@ function open_badges_notify_mail($key, &$message, $params) {
 }
 
 /**
- * Process a request [from OBI] for an assertion
+ * Process a request, presumedly from the Baking Service, for an assertion
  *
  * Returns a JSON blob with a "well-formatted" badge assertion
  * See https://github.com/brianlovesdata/openbadges/wiki/Assertions
  * for assertion documentation
  */
 function open_badges_process_assertion_request($fullurl) {
-  //dpm("open_badges_process_assertion_request: entered!");
+  //dpm("open_badges_process_assertion_request: entered with '{$fullurl}'");
+  //dpm("open_badges_process_assertion_request: TESTING: RETURNING ERROR for url '{$fullurl}' !!!!!'");
+  //return; // XXX TESTING XXX
   $fullurl = trim($fullurl);
   $j = stripos($fullurl, '.json');
   $assertionurl = $j !== FALSE ? substr($fullurl, 0, $j) : $fullurl;
@@ -2346,7 +2369,7 @@ function open_badges_process_assertion_request($fullurl) {
   $a['badge'] = array();
   $a['badge']['version'] = '0.5.0';
   $a['badge']['name'] = $info->name;
-  $a['badge']['image'] = '/' . $info->image;  // OBI insists on the leading slash
+  $a['badge']['image'] = '/' . $info->image;
   $a['badge']['description'] = $info->description;
   $a['badge']['criteria'] = $info->criteria;
 
