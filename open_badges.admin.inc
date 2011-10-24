@@ -530,7 +530,7 @@ function open_badges_recipients_form($form_state, $bid = NULL) {
 
     // Get a list of all current users and their badges
     $all_u = open_badges_get_users();
-    dpm($all_u, 'The list of all the users and their badges');
+    //dpm($all_u, 'The list of all the users and their badges');
 
     $remove_array = array();
     $add_array = array();
@@ -626,7 +626,7 @@ function open_badges_recipients_form_validate($form, &$form_state) {
 }
 
 function open_badges_recipients_form_submit($form, &$form_state) {
-  dpm("open_badges_recipients_form_submit: entered");
+  //dpm("open_badges_recipients_form_submit: entered");
   //dpm($form, "The form array");
   //dpm($form_state, "The form_state array");
 
@@ -663,7 +663,7 @@ function open_badges_recipients_form_submit($form, &$form_state) {
       $extras['evidenceurl'] = $values['evidenceurl'];
     }
 
-    dpm("Should be adding " . count($values['addrecipients']) . ' new users');
+    //dpm("Should be adding " . count($values['addrecipients']) . ' new users');
     // Add the badge to the selected user(s)
     foreach ($values['addrecipients'] as $uid) {
       $success = (boolean) open_badges_user_add_badge($uid, $bid, $extras);
@@ -677,7 +677,7 @@ function open_badges_recipients_form_submit($form, &$form_state) {
       }
     }
 
-    dpm("Should be removing " . count($values['removerecipients']) . ' existing users');
+    //dpm("Should be removing " . count($values['removerecipients']) . ' existing users');
     // Remove the badge from the selected user(s)
     foreach ($values['removerecipients'] as $uid) {
       $success = (boolean) open_badges_user_remove_badge($uid, $bid, 'user');
