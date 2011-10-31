@@ -2398,9 +2398,9 @@ function open_badges_process_assertion_request($fullurl) {
 
   $a['badge'] = array();
   $a['badge']['version'] = '0.5.0';
-  $a['badge']['name'] = $info->name;
+  $a['badge']['name'] = str_replace("'", "\u0027", $info->name);
   $a['badge']['image'] = '/' . $info->image;
-  $a['badge']['description'] = $info->description;
+  $a['badge']['description'] = str_replace("'", "\u0027", $info->description);
   $a['badge']['criteria'] = $info->criteria;
 
   $a['badge']['issuer'] = array();
