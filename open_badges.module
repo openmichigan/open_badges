@@ -1096,10 +1096,7 @@ function open_badges_user_add_badge($uid, $bid, $extras) {
     return $dbresult;
   }
   // XXX Always re-bake, or can we re-use an existing one in some (or all) cases?
-  return open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionurl, $sendtobackpack);
-  //     Delete DB entry in the error case!
-  // XXX Delete DB entry in the error case!
-  //     Delete DB entry in the error case!
+  return open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionurl, $sendtobackpack, TRUE);
 }
 
 
@@ -2036,13 +2033,13 @@ function _update_badge_state_and_bakedimage($uid, $bid, $type, $issuedate, $news
 /**
  * Bake a single badge
  */
-function open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionpath, $sendtobackpack=FALSE) {
+function open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionurl, $sendtobackpack=FALSE, $deleteonerror=TRUE) {
   $headers = array();
   $queryarray = array();
 
   // Construct the query string
   $ourorigin = variable_get('open_badges_defaultissuerorigin', '');  // Assertion URL must be absolute
-  $queryarray['assertion'] = $ourorigin . '/open_badges/assertion/' . $assertionpath;
+  $queryarray['assertion'] = $ourorigin . '/open_badges/assertion/' . $assertionurl;
   $queryarray['award'] = $sendtobackpack ? "true" : "false";
   $querystring = http_build_query($queryarray, '', '&');
   // Add the query string to the url -- it is not 'data'!
@@ -2060,7 +2057,7 @@ function open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionpath, $
     watchdog('error', "Error from baking service for uid @uid and badge @bid : @code : @message : @reason",
              array('@uid' => $uid, '@bid' => $bid, '@code' => $bakeresult->code,
              '@message' => $bakeresult->error, '@reason' => $bakeresult->data), WATCHDOG_WARNING);
-    open_badges_user_remove_badge($uid, $bid, $type);
+    if ($deleteonerror) open_badges_user_remove_badge($uid, $bid, $type);
     return FALSE;
   }
 
@@ -2068,17 +2065,17 @@ function open_badges_bake_badge($uid, $bid, $type, $issuedate, $assertionpath, $
     drupal_set_message("Error, no response from the baking service while baking badge {$bid} for uid {$uid}", 'error');
     watchdog('error', "Error, no response from the baking service while baking badge for uid @uid and badge @bid",
              array('@uid' => $uid, '@bid' => $bid), WATCHDOG_WARNING);
-    open_badges_user_remove_badge($uid, $bid, $type);
+    if ($deleteonerror) open_badges_user_remove_badge($uid, $bid, $type);
     return FALSE;
   }
 
-  $bakedimage = _save_baked_badge($assertionpath, $bakeresult->data);
+  $bakedimage = _save_baked_badge($assertionurl, $bakeresult->data);
   //dpm($bakedimage, "open_badges_bake_badge: The filename returned from _save_baked_badge");
   if ($bakedimage === FALSE) {
-    drupal_set_message("Error saving baked badge to path {$assertionpath} for uid {$uid} and badge {$bid}", 'error');
+    drupal_set_message("Error saving baked badge to path {$assertionurl} for uid {$uid} and badge {$bid}", 'error');
     watchdog('error', "Error saving baked badge to path @path for uid @uid and badge @bid.",
-             array('@uid' => $uid, '@bid' => $bid, '@path' => $assertionpath), WATCHDOG_WARNING);
-    open_badges_user_remove_badge($uid, $bid, $type);
+             array('@uid' => $uid, '@bid' => $bid, '@path' => $assertionurl), WATCHDOG_WARNING);
+    if ($deleteonerror) open_badges_user_remove_badge($uid, $bid, $type);
     return FALSE;
   }
 
@@ -2103,7 +2100,8 @@ function open_badges_bake_badges() {
                       LEFT JOIN {open_badges_user_preferences} obp ON obu.uid = obp.uid
                       WHERE state = %d', OPEN_BADGES_STATE_EARNED);
   while (($badge = db_fetch_object($result)) != NULL) {
-    open_badges_bake_badge($badge->uid, $badge->bid, $badge->issuedate, $badge->assertionurl, (bool) $badge->userallowsharing == OPEN_BADGES_USER_DECISION_YES);
+    open_badges_bake_badge($badge->uid, $badge->bid, $badge->issuedate, $badge->assertionurl, $badge->issuedate,
+                           (bool)($badge->userallowsharing == OPEN_BADGES_USER_DECISION_YES), TRUE);
   }
 }
 
@@ -2428,11 +2426,52 @@ function open_badges_process_assertion_request($fullurl) {
 }
 
 /**
+ * "Re-bake" badges for users that have changed their sharing preference from
+ * "undecided" or "no" to "yes".
+ *
+ * Note that to my knowledge, there is no way to "unshare" badges once they
+ * have been shared.  So there is nothing to perform the opposite operation
+ * when a user has changed their preference from "yes" to "no".
+ */
+function open_badges_share_badges()
+{
+  //dpm("open_badges_share_badges: entered");
+
+  $sql = "SELECT obu.uid, obu.bid, obu.state, obu.type, obu.issuedate, obu.assertionurl
+          FROM {open_badges_user} obu
+          LEFT JOIN {open_badges_user_preferences} obp ON obu.uid = obp.uid
+          WHERE obp.userallowsharing = %d AND obu.state = %d
+          ORDER BY obu.uid";
+
+  $result = db_query($sql, OPEN_BADGES_USER_DECISION_YES, OPEN_BADGES_STATE_BAKED);
+  if ($result === FALSE) {
+    drupal_set_message("open_badges_share_badges: Error getting list of badges which need to be re-baked", 'error');
+    return;
+  }
+  //dpm("open_badges_share_badges: There were " . db_affected_rows() . " results from the SELECT query");
+
+  while ($row = db_fetch_object($result)) {
+    open_badges_bake_badge($row->uid, $row->bid, $row->type, $row->issuedate, $row->assertionurl, TRUE, FALSE);
+  }
+  //dpm("open_badges_share_badges: exiting");
+}
+
+/**
  * Implements hook_cron()
  */
 function open_badges_cron() {
-  //open_badges_bake_badges();
+  /*
+   * The open_badges_bake_badges() function is inteneded to bake badges during
+   * cron.  Instead, we are currently baking badges as they are issued.
+   *
+   * open_badges_bake_badges();
+   */
+
+  // Send email notifications to new badge recipients
   open_badges_notify_new_recipients();
+
+  // When users change their sharing option, re-bake badges sending them to the backpack
+  open_badges_share_badges();
 
  /*
   * UNCOMMENT in order to get Open Badges to work along with Auto Assign Role
