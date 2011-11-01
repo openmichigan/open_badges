@@ -215,7 +215,7 @@ function open_badges_schema() {
         'default' => 0,
         ),
       'allowdisplay' => array(
-        'description' => t('If this is 1, this badges may be displayed locally and shared with the Mozilla OBI.'),
+        'description' => t('Whether the user has chosen to allow the badge to be displayed locally.'),
         'type' => 'int',
         'size' => 'tiny',
         'not null' => TRUE,
