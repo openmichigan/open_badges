@@ -2109,8 +2109,10 @@ function open_badges_bake_badges() {
  * Notify users of their shiny new badges!
  *
  * We get a list of 'baked' badges where the user has not yet been notified.
- * The result list should be ordered by UID.  We loop through and collect all
- * the badges for a user and batch them up into a single email message.
+ * The result list should be ordered by UID.
+ *
+ * This version loops through and collects all the badges for a user and batches
+ * them up into a single email message.
  *
  * XXX Need to mark each entry as 'notified' after the email is successfully sent!
  *
@@ -2329,23 +2331,6 @@ function _open_badges_send_mimemail($key, $params) {
   $sentmsg = mimemail($sender, $recipient, $subject, $body, NULL, $headers, NULL, $attachments);
   //dpm($sentmsg, "The email sent");
   return $sentmsg;
-}
-
-/**
- * Send the notification email
- */
-function open_badges_notify_mail($key, &$message, $params) {
-  //dpm("open_badges_notify_mail: entered!");
-  $message['subject'] = variable_get('open_badges_subject', t('You have earned a new badge!'));
-  switch ($key) {
-    case 'shared':
-      $message['body'][] = variable_get('open_badges_bodyshared', '');
-      break;
-    case 'notshared':
-      $message['body'][] = variable_get('open_badges_bodynotshared', '');
-      break;
-  }
-  return FALSE;
 }
 
 /**
