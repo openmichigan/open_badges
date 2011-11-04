@@ -1453,7 +1453,7 @@ function open_badges_get_users() {
     // Since we ignore revoked badges below, we keep track in case
     // a user only has revoked badges.  In that case, we add them
     // to the 'none' array.
-    if ($row->uid != $current_uid && $current_uid != -1) {
+    if ($current_uid != -1 && $row->uid != $current_uid) {
       if (!is_array($users[$current_uid])) {
         $users[$current_uid]['none'] = $current_row;
       }
@@ -1470,6 +1470,10 @@ function open_badges_get_users() {
         $users[$row->uid][$row->type][$row->bid] = $row;
       }
     }
+  }
+  // Include the last user if all they have are revoked badges!
+  if ($current_uid != -1 && !is_array($users[$current_uid])) {
+      $users[$current_uid]['none'] = $current_row;
   }
 
   //dpm($users, "open_badges_get_users: the final array");
