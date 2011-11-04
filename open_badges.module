@@ -1441,25 +1441,38 @@ function open_badges_get_roles($rid = NULL, $options = array()) {
  */
 function open_badges_get_users() {
   $users = array();
-  $sql = db_query('SELECT u.uid, u.name, u.mail, obu.bid, obu.type, obu.state
-                   FROM {users} u
-                   LEFT JOIN {open_badges_user} obu
-                   ON obu.uid = u.uid
-                   ORDER BY u.uid ASC');
-  while ($row = db_fetch_object($sql)) {
+  $qresult = db_query('SELECT u.uid, u.name, u.mail, obu.bid, obu.type, obu.state
+                       FROM {users} u
+                       LEFT JOIN {open_badges_user} obu
+                       ON obu.uid = u.uid
+                       ORDER BY u.uid ASC');
+  $current_uid = -1;
+  while ($row = db_fetch_object($qresult)) {
     //dpm($row, 'get_users: A raw row from the db_query');
-    if (isset($row->bid) && $row->state == OPEN_BADGES_STATE_BAKED_AND_REVOKED) {
-      // Ignore revoked badges
-      continue;
+
+    // Since we ignore revoked badges below, we keep track in case
+    // a user only has revoked badges.  In that case, we add them
+    // to the 'none' array.
+    if ($row->uid != $current_uid && $current_uid != -1) {
+      if (!is_array($users[$current_uid])) {
+        $users[$current_uid]['none'] = $current_row;
+      }
     }
-    if (isset($row->bid)) {
-      //dpm("uid '{$row->uid}' name '{$row->name}' bid '{$row->bid}' type '{$row->type}'");
-      $users[$row->uid][$row->type][$row->bid] = $row;
-    } else {
-      //dpm("uid '{$row->uid}' name '{$row->name}'");
+    $current_uid = $row->uid;
+    $current_row = $row;
+    //dpm("open_badges_get_users: processing row with uid '{$row->uid}' name '{$row->name}' bid '{$row->bid}' type '{$row->type}' state '{$row->state}'");
+    if (!isset($row->bid)) {
+      //dpm("User has NO badges: uid '{$row->uid}' name '{$row->name}'");
       $users[$row->uid]['none'] = $row;
+    } else {
+      // Ignore revoked badges while we go through this list
+      if ($row->state != OPEN_BADGES_STATE_BAKED_AND_REVOKED) {
+        $users[$row->uid][$row->type][$row->bid] = $row;
+      }
     }
   }
+
+  //dpm($users, "open_badges_get_users: the final array");
   return $users;
 }
 
@@ -2199,9 +2212,11 @@ function open_badges_notify_new_recipients() {
           WHERE obu.usernotified = %d AND (obu.state = %d OR obu.state =  %d)
           ORDER BY obu.uid";
 
-  $result = db_query(db_rewrite_sql($sql),
-                     0, OPEN_BADGES_STATE_BAKED, OPEN_BADGES_STATE_BAKED_AND_SHARED);
-  if ($result === FALSE) {
+  // db_rewrite_sql() is causing bad query?
+  //$result = db_query(db_rewrite_sql($sql),
+  //                   0, OPEN_BADGES_STATE_BAKED, OPEN_BADGES_STATE_BAKED_AND_SHARED);
+  $result = db_query($sql, 0, OPEN_BADGES_STATE_BAKED, OPEN_BADGES_STATE_BAKED_AND_SHARED);
+                     if ($result === FALSE) {
     drupal_set_message("open_badges_notify_new_recipients: Error getting list of recipients", 'error');
     return;
   }

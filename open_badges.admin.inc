@@ -539,7 +539,7 @@ function open_badges_recipients_form($form_state, $bid = NULL) {
       //dpm($u, 'Looking at user');
       if (isset($u['none'])) {
         // Those with no badges automatically go on the add list
-        $add_array[$u['none']->uid] = $u['none']->name . '(uid ' . $u['none']->uid . ')';
+        $add_array[$u['none']->uid] = $u['none']->name . ' (uid ' . $u['none']->uid . ')';
       } else if (isset($u['user']) && isset($u['user'][$bid])) {
         // Don't include those that received this badge because of 'role' in the remove list
         $remove_array[$u['user'][$bid]->uid] = $u['user'][$bid]->name . '(uid ' . $u['user'][$bid]->uid . ')';
