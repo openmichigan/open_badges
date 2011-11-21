@@ -25,6 +25,12 @@ function open_badges_views_handlers() {
       'views_handler_filter_open_badges_user_type' => array(
         'parent' => 'views_handler_filter_in_operator',
       ),
+      'views_handler_filter_open_badges_badge_state' => array(
+        'parent' => 'views_handler_filter_in_operator',
+      ),
+      'views_handler_filter_open_badges_user_decision' => array(
+        'parent' => 'views_handler_filter_in_operator',
+      ),
     ),
   );
 }
@@ -109,6 +115,96 @@ function open_badges_views_data() {
     //Info for filtering by badge type
     'filter' => array(
       'handler' => 'views_handler_filter_open_badges_user_type',
+    ),
+    // Information for sorting on a bid.
+    'sort' => array(
+      'handler' => 'views_handler_sort',
+    ),
+  );
+
+  // Information for processing badge states
+  $data['open_badges_user']['state'] = array(
+    'title' => t('State'),
+    'help' => t('State of this badge in the Mozilla OBI process of "baking", sharing, etc.'),
+    'field' => array(
+      'handler' => 'views_handler_field',
+      'click sortable' => TRUE,
+    ),
+    //Info for filtering by badge type
+    'filter' => array(
+      'handler' => 'views_handler_filter_open_badges_badge_state',
+    ),
+    // Information for sorting on a bid.
+    'sort' => array(
+      'handler' => 'views_handler_sort',
+    ),
+  );
+
+  // Information for processing badge display decision
+  $data['open_badges_user']['allowdisplay'] = array(
+    'title' => t('AllowDisplay'),
+    'help' => t('Whether the user has chosen to allow the badge to be displayed locally.'),
+    'field' => array(
+      'handler' => 'views_handler_field',
+      'click sortable' => TRUE,
+    ),
+    //Info for filtering by badge type
+    'filter' => array(
+      'handler' => 'views_handler_filter_open_badges_user_decision',
+    ),
+    // Information for sorting on a bid.
+    'sort' => array(
+      'handler' => 'views_handler_sort',
+    ),
+  );
+
+  // Information about the issue date of the badge
+  $data['open_badges_user']['issuedate'] = array(
+    'title' => t('IssueDate'),
+    'help' => t('Date when the badge was issued.'),
+    'field' => array(
+      'handler' => 'views_handler_field',
+      'click sortable' => TRUE,
+    ),
+    //Info for filtering by badge type
+    'filter' => array(
+      'handler' => 'views_handler_filter_date',
+    ),
+    // Information for sorting on a bid.
+    'sort' => array(
+      'handler' => 'views_handler_sort',
+    ),
+  );
+
+  // Information about the expiration time of the badge
+  $data['open_badges_user']['expirationdate'] = array(
+    'title' => t('Expiration'),
+    'help' => t('Date when the badge expires.  The default is that the badge does not expire.'),
+    'field' => array(
+      'handler' => 'views_handler_field',
+      'click sortable' => TRUE,
+    ),
+    //Info for filtering by badge type
+    'filter' => array(
+      'handler' => 'views_handler_filter_date',
+    ),
+    // Information for sorting on a bid.
+    'sort' => array(
+      'handler' => 'views_handler_sort',
+    ),
+  );
+
+  // Information about whether the user has been notified about the badge
+  $data['open_badges_user']['usernotified'] = array(
+    'title' => t('UserNotified'),
+    'help' => t('If this is 1, the user has been notified that the badge has been issued.'),
+    'field' => array(
+      'handler' => 'views_handler_field',
+      'click sortable' => TRUE,
+    ),
+    //Info for filtering by badge type
+    'filter' => array(
+      'handler' => 'views_handler_filter_boolean_operator',
     ),
     // Information for sorting on a bid.
     'sort' => array(
