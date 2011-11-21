@@ -205,10 +205,10 @@ function open_badges_menu() {
     'type' => MENU_CALLBACK,
     );
 
-  $items['open_badges/%'] = array(
+  $items['open_badges/recipients/%'] = array(
     'title' => 'Open Badges Recipients',
     'page callback' => 'open_badges_show_recipients',
-    'page arguments' => array(1),
+    'page arguments' => array(2),
     'access callback' => TRUE,
     'type' => MENU_CALLBACK,
     );
@@ -1209,7 +1209,7 @@ function open_badges_get_badges($uid, $options = array()) {
     if ($uid == 'all' || $uid == 'select') {
       //dpm("open_badges_get_badges: getting '{$uid}' badges");
       $sql = db_query('SELECT b.bid, b.weight, b.name, b.image, b.criteria, b.description,
-        b.unhideable, b.fixedweight, b.doesnotcounttolimit, b.tid,
+        b.unhideable, b.fixedweight, b.doesnotcounttolimit, b.tid
         FROM {open_badges_badges} b
         ORDER BY b.weight, b.name');
     }
@@ -1256,6 +1256,7 @@ function open_badges_get_badges($uid, $options = array()) {
     $checksharingoption = user_access('manage badges') == FALSE && ($uid != 'all' && $uid != 'select' && $uid != $user->uid);
     //dpm("open_badges_get_badges: checksharingoption is " . ($checksharingoption ? "TRUE" : "FALSE"));
     while ($badge = db_fetch_object($sql)) {
+      //dpm($badge, "open_badges_get_badges: an entry being considered");
       // Display the badge if there's no limit or if the badge is unhideable or if we are within our limit.
       if ($checksharingoption && $badge->allowdisplay != OPEN_BADGES_USER_DECISION_YES)
         continue;
@@ -1323,22 +1324,67 @@ function open_badges_get_badge_recipients($bid) {
  * Show recipients of badge $bid
  */
 function open_badges_show_recipients($bid) {
-  $form = array('#tree' => TRUE);
-  
-  //dpm("open_badges_show_recipients: badge id {$bid}");
-  $recipients = open_badges_get_badge_recipients($bid);
-  //dpm($recipients, "open_badges_show_recipients: the recipients of badges {$bid}");
-  $outout = "<title>Hello World</title>";
-  return $form;
-}
+  // Get a list of all the badges
+  $allbadges = open_badges_get_badges('all');
+  // Get a list of all the users and their badges
+  $allusers = open_badges_get_users();
 
-/**
- * Show recipients of badge $bid
- */
-function theme_open_badges_show_recipients($form) {
-  //dpm("theme_open_badges_show_recipients: entered");
-  $outout = "<title>Hello World</title>";
-  $output .= drupal_render($form);
+  if ($bid == 'all') {
+    $output = "<h2>All Open Badges recipients</h2>";
+    $nobadgemsg = "<br />No users are displaying badges<br />";
+  } else {
+    //dpm($allbadges, "All the badge information");
+    $output = "<h2>Users who have received the '" . $allbadges[$bid]->name . "' badge</h2>";
+    $nobadgemsg = "<br />No users are displaying this badge<br />";
+  }
+
+  $users = array();
+  // Make a list of the users who received this badge, and all their other badges
+  foreach ($allusers as $uid => $u) {
+    if (($bid == 'all' && !isset($u['none'])) ||
+       ((isset($u['user']) && isset($u['user'][$bid])) || (isset($u['role']) && isset($u['role'][$bid])))) {
+      //dpm("User {$uid} received badge {$bid}");
+      foreach ($u['user'] as $uu) {
+        $users[$uid]['name'] = $uu->name;
+        $users[$uid][$uu->bid] = $uu;
+      }
+      foreach ($u['role'] as $ur) {
+        $users[$uid]['name'] = $ur->name;
+        $users[$uid][$ur->bid] = $ur;
+      }
+    }
+  }
+
+  if (count($users) == 0) {
+    $output .= $nobadgemsg;
+  } else {
+    $output .= '<div style="overflow:auto; height:350px; width:700px">';
+    $output .= '<table cellpadding="5" cellspacing="5" style="width:100px">';
+
+    foreach ($users as $uid => $userbadges) {
+      // Grab the name, and condense the list to the badgeids
+      $username = $userbadges['name'];
+      $badgeids = array_keys($userbadges);
+      array_shift($badgeids);
+
+      // Output a row for each user, listing all their badges
+      $output .= '<tr>';
+      $output = $output . '<td> ' . $username . ' </td>';
+      foreach ($badgeids as $bid) {
+        $output = $output . '<td> ' . theme_open_badge($allbadges[$bid]) . ' </td>';
+      }
+      $output .= '</tr>';
+    }
+    $output .= '</table>';
+    $output .= '</div>';
+  }
+
+  // This shows all badges
+  //$block = module_invoke('views', 'block', 'view', 'open_badges_recipients-block_1');
+  //$output .= $block['content'];
+
+  // So does this!
+  //$output .= views_embed_view('open_badges_recipients', 'default');
   return $output;
 }
 
@@ -1440,8 +1486,15 @@ function open_badges_get_roles($rid = NULL, $options = array()) {
  * @return An array containing a row for each user and which, if any, badges they've been issued
  */
 function open_badges_get_users() {
+  global $user;
+  $admin = FALSE;
+  if (user_access('manage badges') == TRUE || user_access('change badge assignments') == TRUE) {
+    $admin = TRUE;
+  }
+  //dpm("open_badges_get_users: user is {$user->uid}, admin is " . ($admin ? "TRUE" : "FALSE"));
+
   $users = array();
-  $qresult = db_query('SELECT u.uid, u.name, u.mail, obu.bid, obu.type, obu.state
+  $qresult = db_query('SELECT u.uid, u.name, u.mail, obu.bid, obu.type, obu.state, obu.allowdisplay
                        FROM {users} u
                        LEFT JOIN {open_badges_user} obu
                        ON obu.uid = u.uid
@@ -1466,7 +1519,9 @@ function open_badges_get_users() {
       $users[$row->uid]['none'] = $row;
     } else {
       // Ignore revoked badges while we go through this list
-      if ($row->state != OPEN_BADGES_STATE_BAKED_AND_REVOKED) {
+      // Also, if the user is not an admin and the badge is
+      // not marked with 'allowdisplay', ignore it
+      if ($row->state != OPEN_BADGES_STATE_BAKED_AND_REVOKED && ($admin == TRUE || $row->allowdisplay == OPEN_BADGES_USER_DECISION_YES)) {
         $users[$row->uid][$row->type][$row->bid] = $row;
       }
     }
