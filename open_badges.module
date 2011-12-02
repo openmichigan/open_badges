@@ -1323,7 +1323,7 @@ function open_badges_get_badge_recipients($bid) {
 /**
  * Show recipients of badge $bid
  */
-function open_badges_show_recipients($bid) {
+function open_badges_show_recipients($bid, $height=350, $width=700) {
   // Get a list of all the badges
   $allbadges = open_badges_get_badges('all');
   // Get a list of all the users and their badges
@@ -1358,7 +1358,7 @@ function open_badges_show_recipients($bid) {
   if (count($users) == 0) {
     $output .= $nobadgemsg;
   } else {
-    $output .= '<div style="overflow:auto; height:350px; width:700px">';
+    $output .= '<div style="overflow:auto; height:'. $height . 'px; width:'. $width . 'px">';
     $output .= '<table cellpadding="5" cellspacing="5" style="width:100px">';
 
     foreach ($users as $uid => $userbadges) {
