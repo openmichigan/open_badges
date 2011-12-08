@@ -1330,7 +1330,7 @@ function open_badges_show_recipients($bid, $height=350, $width=700) {
   $allusers = open_badges_get_users();
 
   if ($bid == 'all') {
-    $output = "<h2>All Open Badges recipients</h2>";
+    $output = "<h2>All Badge recipients</h2>";
     $nobadgemsg = "<br />No users are displaying badges<br />";
   } else {
     //dpm($allbadges, "All the badge information");
