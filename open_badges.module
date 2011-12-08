@@ -1321,6 +1321,14 @@ function open_badges_get_badge_recipients($bid) {
 }
 
 /**
+ * Helper function for sorting the recipients array in open_badges_show_recipients
+ * Sort by number of badges, descending
+ */
+function _recipients_sort_helper($a, $b) {
+  return count(array_keys($a)) > count(array_keys($b)) ? -1 : 1;
+}
+
+/**
  * Show recipients of badge $bid
  */
 function open_badges_show_recipients($bid, $height=350, $width=700) {
@@ -1354,6 +1362,9 @@ function open_badges_show_recipients($bid, $height=350, $width=700) {
       }
     }
   }
+
+  // Sort the list putting users with the most badges first
+  uasort($users, _recipients_sort_helper);
 
   if (count($users) == 0) {
     $output .= $nobadgemsg;
