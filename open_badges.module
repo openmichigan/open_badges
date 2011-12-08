@@ -1331,7 +1331,7 @@ function _recipients_sort_helper($a, $b) {
 /**
  * Show recipients of badge $bid
  */
-function open_badges_show_recipients($bid, $height=350, $width=700) {
+function open_badges_show_recipients($bid, $height=350, $width=700, $wrap=5) {
   // Get a list of all the badges
   $allbadges = open_badges_get_badges('all');
   // Get a list of all the users and their badges
@@ -1381,8 +1381,13 @@ function open_badges_show_recipients($bid, $height=350, $width=700) {
       // Output a row for each user, listing all their badges
       $output .= '<tr>';
       $output = $output . '<td> ' . $username . ' </td>';
+      $count = 0;
       foreach ($badgeids as $bid) {
         $output = $output . '<td> ' . theme_open_badge($allbadges[$bid]) . ' </td>';
+        if (++$count >= $wrap) {
+          $output .= '</tr><tr><td></td>';
+          $count = 0;
+        }
       }
       $output .= '</tr>';
     }
