@@ -73,7 +73,7 @@ function open_badges_menu() {
   $access = array('manage badges');
 
   $items['admin/user/open_badges'] = array(
-    'title' => 'Open Badges',
+    'title' => 'Manage Badges',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('open_badges_badgelist_form'),
     'access arguments' => $access,
@@ -164,7 +164,7 @@ function open_badges_menu() {
     );
 
   $items['user/%/open_badges'] = array(
-    'title' => 'Open Badges',
+    'title' => 'Manage Badges',
     'page callback' => 'open_badges_userweight_page',
     'page arguments' => array(1),
     'access arguments' => array('show badges in user profile'),
@@ -352,10 +352,29 @@ function open_badges_user($op, &$edit, &$account, $category = 'account') {
           '#weight' => 10,
           '#attributes' => array('class' => 'open-badges'),
         );
+        $account->content['open_badges']['link1'] = array(
+          '#type' => 'user_profile_item',
+          '#value' => theme('open_badges_link', 'connect/badges', array('text' => t('Earn more badges'))), // XXX Should be configurable
+          '#weight' => 2,
+          '#attributes' => array('class' => 'open-badges'),
+        );
         $account->content['open_badges']['badges'] = array(
           '#type' => 'user_profile_item',
           '#value' => theme('open_badge_group', $badgeimgs),
+          '#weight' => 3,
           '#attributes' => array('class' => 'badges'),
+        );
+        $account->content['open_badges']['link2'] = array(
+          '#type' => 'user_profile_item',
+          '#value' => t('View your badges in the ') . theme('open_badges_link', 'http://beta.openbadges.org/backpack/login#', array('text' => t('Mozilla OBI Backpack'))), // XXX Should be configurable
+          '#weight' => 4,
+          '#attributes' => array('class' => 'open-badges'),
+        );
+        $account->content['open_badges']['link3'] = array(
+          '#type' => 'user_profile_item',
+          '#value' => t('To learn more about the Mozilla OBI Backpack, go ') . theme('open_badges_link', 'https://wiki.mozilla.org/Badges/About', array('text' => t('here'))), // XXX Should be configurable
+          '#weight' => 5,
+          '#attributes' => array('class' => 'open-badges'),
         );
       }
   }
