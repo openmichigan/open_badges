@@ -557,6 +557,7 @@ function open_badges_userweight_form(&$form_state, $account) {
 function open_badges_userweight_form_submit($form, &$form_state) {
   //dpm($form, "open_badges_userweight_form_submit: The submitted form!");
   //dpm($form_state, "open_badges_userweight_form_submit: The submitted form_state!");
+  $wrote_user_preferences = FALSE;
   if (isset($form['weight']) && is_array($form['weight'])) {
     foreach (element_children($form['weight']) as $bid) {
       db_query("UPDATE {open_badges_user} SET userweight = %d WHERE bid = %d AND uid = %d",
@@ -574,6 +575,7 @@ function open_badges_userweight_form_submit($form, &$form_state) {
       $record->userallowsharing = $form_state['values']['userallowsharing'];
       $result = drupal_write_record('open_badges_user_preferences', $record);
       //dpm("The result of drupal_write_record() was '{$result}'");
+      $wrote_user_preferences = TRUE;
     } else {
       db_query("UPDATE {open_badges_user_preferences} SET userallowsharing = %d WHERE uid = %d",
                $form_state['values']['userallowsharing'], $form_state['values']['uid']);
@@ -582,7 +584,7 @@ function open_badges_userweight_form_submit($form, &$form_state) {
              array('@yesno' => $form_state['values']['userallowsharing'] == OPEN_BADGES_USER_DECISION_NO ? t('NOT') : t('now'))));
   }
   if (isset($form_state['values']['useremails']) && $form_state['values']['useremails'] != $form_state['open_badges']['initial_values']['useremails']) {
-    if ($form_state['open_badges']['initial_values']['userallowsharing'] === FALSE && $form_state['open_badges']['initial_values']['useremails'] === FALSE) {
+    if ($wrote_user_preferences == FALSE && $form_state['open_badges']['initial_values']['userallowsharing'] === FALSE && $form_state['open_badges']['initial_values']['useremails'] === FALSE) {
       $record = new StdClass();
       $record->uid = $form_state['values']['uid'];
       $record->useremails = $form_state['values']['useremails'];
