@@ -615,8 +615,8 @@ function open_badges_userweight_form_submit($form, &$form_state) {
     }
   }
   // Instead of a redirect, cause the form to be rebuilt and re-displayed
-  $form_state['rebuild'] = TRUE;
-  // $form_state['redirect'] = 'user/' . $form_state['values']['uid'];
+  //$form_state['rebuild'] = TRUE;
+  $form_state['redirect'] = 'user/' . $form_state['values']['uid'] . '/open_badges';
 
 }
 
